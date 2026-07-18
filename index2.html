@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的工作追蹤看板</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #18bc9c;
+            --bg-color: #f8f9fa;
+        }
+        body {
+            font-family: "Helvetica Neue", Helvetica, Arial, "PingFang TC", "Microsoft JhengHei", sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            background: #fff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .header-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        h1 {
+            color: var(--primary-color);
+            margin: 0;
+        }
+        
+        /* 雲端狀態顯示區 */
+        .sync-status-badge {
+            background-color: #34495e;
+            color: white;
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: bold;
+            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        /* 頁籤控制區塊 */
+        .filter-section {
+            margin-bottom: 10px;
+            display: flex;
+            gap: 10px;
+            padding-bottom: 5px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .btn-filter {
+            background-color: #e2e3e5;
+            color: #383d41;
+            border: none;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-filter:hover { background-color: #d6d8db; }
+        .btn-filter.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        
+        /* 類別過濾區塊 */
+        .category-filter-section {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+            border-bottom: 2px solid #e2e3e5;
+            padding-bottom: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .btn-category-toggle {
+            background-color: #ffffff;
+            color: #555;
+            border: 2px solid #bdc3c7;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-category-toggle.active-law {
+            background-color: #ebf5fb;
+            color: #2980b9;
+            border-color: #3498db;
+        }
+        .btn-category-toggle.active-other {
+            background-color: #f5eef8;
+            color: #8e44ad;
+            border-color: #9b59b6;
+        }
+
+        /* 輸入表單區塊 */
+        .form-section {
+            background: #f1f4f6;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 25px;
+        }
+        .form-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: flex-end;
+            margin-bottom: 15px;
+        }
+        .form-row:last-child { margin-bottom: 0; }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-width: 130px;
+        }
+        .form-group.flex-2 { flex: 2; min-width: 250px; }
+        .form-group.flex-small { flex: 0.6; min-width: 110px; }
+        .form-group.flex-owner { flex: 0.4; min-width: 75px; }
+        label {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 6px;
+            color: #555;
+        }
+        input, select, textarea {
+            padding: 10px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+            background-color: #fff;
+        }
+        textarea { resize: vertical; height: 40px; }
+        
+        /* 新增按鈕 */
+        .btn-add {
+            background-color: var(--secondary-color);
+            color: white;
+            border: none;
+            padding: 0 25px;
+            font-size: 15px;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            height: 40px;
+            transition: background 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+        }
+        .btn-add:hover { background-color: #128f76; }
+        
+        /* 表格樣式 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 15px;
+            table-layout: auto;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px 10px;
+            text-align: left;
+            vertical-align: top;
+        }
+        th {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        
+        /* 視覺凸顯樣式 */
+        tr.row-priority-high { background-color: #fffde7 !important; }
+        tr.row-priority-high:hover { background-color: #fff9c4 !important; }
+        
+        /* 法規專屬淡藍底色凸顯 */
+        tr.row-is-law { background-color: #f4f9fd; }
+        tr.row-is-law:hover { background-color: #eafeff; }
+        
+        tr:nth-child(even):not(.row-is-law):not(.row-priority-high) { background-color: #f9f9f9; }
+        tr:hover:not(.row-is-law):not(.row-priority-high) { background-color: #f1f1f1; }
+        
+        .status-select {
+            font-weight: bold;
+            padding: 6px;
+            border-radius: 4px;
+            width: 125px;
+            box-sizing: border-box;
+        }
+        .status-todo { background-color: #e2e3e5; color: #383d41; }
+        .status-doing { background-color: #cce5ff; color: #004085; }
+        .status-done { background-color: #d4edda; color: #155724; }
+        .status-delay { background-color: #f8d7da; color: #721c24; }
+        .status-archive { background-color: #e2e3e5; color: #6c757d; border: 1px solid #6c757d; }
+
+        .type-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .type-general { background-color: #ebf5fb; color: #2980b9; }
+        .type-assign { background-color: #fef9e7; color: #b7950b; border: 1px dashed #f1c40f; }
+        .type-reminder { background-color: #f4ecf7; color: #8e44ad; }
+
+        .cat-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        .cat-law { background-color: #3498db; color: white; }
+        .cat-other { background-color: #95a5a6; color: white; }
+
+        .light-indicator {
+            font-size: 18px;
+            display: inline-block;
+            margin-top: 5px;
+            text-align: center;
+            width: 100%;
+        }
+
+        .inline-edit-area {
+            width: 100%;
+            min-width: 110px;
+            border: 1px dashed transparent;
+            background: transparent;
+            padding: 4px;
+            font-family: inherit;
+            font-size: 15px;
+            box-sizing: border-box;
+            overflow: hidden;
+            resize: none;
+            display: block;
+            line-height: 1.4;
+        }
+        .inline-edit-area:focus {
+            border: 1px solid #666;
+            background: #fff;
+            outline: none;
+            border-radius: 4px;
+        }
+        
+        .inline-edit-input {
+            border: 1px dashed transparent;
+            background: transparent;
+            padding: 4px;
+            font-family: inherit;
+            font-size: 15px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .inline-edit-input:focus {
+            border: 1px solid #666;
+            background: #fff;
+            outline: none;
+            border-radius: 4px;
+        }
+
+        .btn-delete {
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn-delete:hover { background-color: #c0392b; }
+
+        .readonly-text {
+            padding: 4px;
+            font-size: 15px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header-area">
+        <h1>📋 我的工作追蹤看板</h1>
+        <div id="syncStatus" class="sync-status-badge">💾 狀態：僅本機儲存</div>
+    </div>
+    
+    <!-- 第一行：主功能狀態頁籤 -->
+    <div class="filter-section">
+        <button id="filterActive" class="btn-filter active" onclick="switchFilter('active')">🔍 進行中 / 全部</button>
+        <button id="filterDone" class="btn-filter" onclick="switchFilter('done')">✅ 只看已完成</button>
+        <button id="filterReminder" class="btn-filter" onclick="switchFilter('reminder')">💡 提醒事項區</button>
+        <button id="filterArchive" class="btn-filter" onclick="switchFilter('archive')">📦 歷史結案區</button>
+    </div>
+
+    <!-- 第二行：獨立類別篩選行 -->
+    <div class="category-filter-section">
+        <button id="catFilterAll" class="btn-category-toggle active-law" style="border-radius:4px;" onclick="switchCategoryFilter('all')">全部類別</button>
+        <button id="catFilterLaw" class="btn-category-toggle" onclick="switchCategoryFilter('law')">⚖️ 法規項目</button>
+        <button id="catFilterOther" class="btn-category-toggle" onclick="switchCategoryFilter('other')">📝 其他項目</button>
+    </div>
+    
+    <!-- 輸入表單 -->
+    <div id="inputFormSection" class="form-section">
+        <div class="form-row">
+            <div class="form-group flex-small">
+                <label for="taskImportance">⭐ 重要性</label>
+                <select id="taskImportance">
+                    <option value="3">高 (★★★)</option>
+                    <option value="2" selected>中 (★★)</option>
+                    <option value="1">低 (★)</option>
+                </select>
+            </div>
+            <div class="form-group flex-small">
+                <label for="taskClass">⚖️ 類別選定</label>
+                <select id="taskClass">
+                    <option value="law" selected>⚖️ 法規項目</option>
+                    <option value="other">📝 其他項目</option>
+                </select>
+            </div>
+            <div class="form-group flex-small">
+                <label for="taskType">事項類型</label>
+                <select id="taskType" onchange="toggleDateFields(this.value)">
+                    <option value="general">一般事項</option>
+                    <option value="assign">👉 指派工作</option>
+                    <option value="reminder">💡 提醒事項</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="project">相關專案</label>
+                <input type="text" id="project" placeholder="相關專案名稱...">
+            </div>
+            <div class="form-group flex-2">
+                <label for="task">預計完成事項 / 提醒內容</label>
+                <textarea id="task" placeholder="請輸入完整工作內容..."></textarea>
+            </div>
+            <div class="form-group flex-owner">
+                <label for="owner">負責人</label>
+                <input type="text" id="owner" placeholder="我">
+            </div>
+            <div class="form-group date-field">
+                <label for="reqDate">要求日</label>
+                <input type="date" id="reqDate">
+            </div>
+            <div class="form-group date-field">
+                <label for="promiseDate">預計完成日</label>
+                <input type="date" id="promiseDate">
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group flex-2">
+                <label for="note">備註</label>
+                <textarea id="note" placeholder="每日進度簡述或備註..."></textarea>
+            </div>
+            <div style="display: flex; align-items: flex-end;">
+                <button class="btn-add" onclick="addTask()">➕ 新增事項</button>
+            </div>
+        </div>
+    </div>
+
+    <table id="kanbanTable">
+        <thead>
+            <tr>
+                <th style="width: 60px; text-align: center;">狀態</th>
+                <th style="width: 100px;">重要性</th>
+                <th style="width: 110px;">類別/類型</th>
+                <th style="width: 130px;">相關專案</th>
+                <th style="width: 32%;">預計完成事項 / 提醒內容</th>
+                <th style="width: 75px;">負責人</th> 
+                <th style="width: 110px;" class="col-date-header">要求日</th>
+                <th style="width: 110px;" class="col-date-header">預計完成日</th>
+                <th style="width: 125px;" class="col-status-header">每日進度狀態</th>
+                <th style="width: 20%;">備註</th>
+                <th style="width: 65px;">操作</th>
+            </tr>
+        </thead>
+        <tbody id="taskRows">
+        </tbody>
+    </table>
+</div>
+
+<script>
+    let currentFilter = 'active';
+    let currentCategoryFilter = 'all'; 
+    
+    let tasks = JSON.parse(localStorage.getItem('kanban_tasks')) || [];
+    let archivedTasks = JSON.parse(localStorage.getItem('kanban_archived_tasks')) || [];
+
+    function toggleDateFields(type) {
+        const dateFields = document.querySelectorAll('.date-field');
+        dateFields.forEach(field => {
+            field.style.display = (type === 'reminder') ? 'none' : 'flex';
+        });
+    }
+
+    function getAutoLight(reqDate, currentStatus, type) {
+        if (type === 'reminder') return '⚪'; 
+        if (currentStatus === 'done' || currentStatus === 'archive') return '⚪';
+        if (!reqDate) return '⚪';
+
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const targetDate = new Date(reqDate);
+        targetDate.setHours(0,0,0,0);
+
+        const diffTime = targetDate - today;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 0) return '💥'; 
+        if (diffDays <= 3) return '🔴'; 
+        return '🟢'; 
+    }
+
+    function getImportanceLabel(val) {
+        if (val === "3") return "★★★ 高";
+        if (val === "2") return "★★ 中";
+        return "★ 低";
+    }
+
+    autoResizeTextarea = (el) => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
+
+    function checkThreeDaysAutoArchive() {
+        const now = Date.now();
+        const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+        let changed = false;
+
+        for (let i = tasks.length - 1; i >= 0; i--) {
+            if (tasks[i].status === 'archive' && tasks[i].archiveDate) {
+                const archiveTime = new Date(tasks[i].archiveDate).getTime();
+                if (now - archiveTime >= threeDaysMs) {
+                    let oldTask = { ...tasks[i], finalArchivedTime: new Date().toLocaleString() };
+                    archivedTasks.push(oldTask);
+
+                    let newCase = {
+                        id: Date.now() + Math.random(), importance: tasks[i].importance || "2",
+                        category: tasks[i].category || "other", type: tasks[i].type || 'general',
+                        project: tasks[i].project || '', task: `【新案件續辦】自動產生的後續任務`,
+                        owner: tasks[i].owner, reqDate: '', promiseDate: '', status: 'todo',
+                        note: `由前案結案自動產件。`, archiveDate: null
+                    };
+                    tasks.push(newCase);
+                    tasks.splice(i, 1);
+                    changed = true;
+                }
+            }
+        }
+        if (changed) saveToStorage();
+    }
+
+    function switchFilter(mode) {
+        currentFilter = mode;
+        document.getElementById('filterActive').classList.toggle('active', mode === 'active');
+        document.getElementById('filterDone').classList.toggle('active', mode === 'done');
+        document.getElementById('filterReminder').classList.toggle('active', mode === 'reminder');
+        document.getElementById('filterArchive').classList.toggle('active', mode === 'archive');
+        document.getElementById('inputFormSection').style.display = (mode === 'archive') ? 'none' : 'block';
+        renderTable();
+    }
+
+    function switchCategoryFilter(catMode) {
+        currentCategoryFilter = catMode;
+        document.getElementById('catFilterAll').classList.toggle('active-law', catMode === 'all');
+        document.getElementById('catFilterLaw').classList.toggle('active-law', catMode === 'law');
+        document.getElementById('catFilterOther').classList.toggle('active-other', catMode === 'other');
+        renderTable();
+    }
+
+    function saveToStorage() {
+        localStorage.setItem('kanban_tasks', JSON.stringify(tasks));
+        localStorage.setItem('kanban_archived_tasks', JSON.stringify(archivedTasks));
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('taskRows');
+        tbody.innerHTML = '';
+
+        let dataSource = (currentFilter === 'archive') ? archivedTasks : tasks;
+        
+        if (currentFilter !== 'archive') {
+            dataSource.sort((a, b) => {
+                const impA = parseInt(a.importance) || 2;
+                const impB = parseInt(b.importance) || 2;
+                if (impB !== impA) return impB - impA; 
+                if (!a.reqDate) return 1;
+                if (!b.reqDate) return -1;
+                return new Date(a.reqDate) - new Date(b.reqDate);
+            });
+        } else {
+            dataSource.sort((a, b) => new Date(b.finalArchivedTime) - new Date(a.finalArchivedTime));
+        }
+
+        const dateHeaders = document.querySelectorAll('.col-date-header');
+        dateHeaders.forEach(th => th.style.display = (currentFilter === 'reminder') ? 'none' : 'table-cell');
+        const statusHeader = document.querySelector('.col-status-header');
+        if (statusHeader) statusHeader.style.display = (currentFilter === 'reminder') ? 'none' : 'table-cell';
+
+        dataSource.forEach((item) => {
+            if (currentFilter === 'active' && (item.status === 'archive' || item.type === 'reminder')) return;
+            if (currentFilter === 'done' && (item.status !== 'done' || item.type === 'reminder')) return;
+            if (currentFilter === 'reminder' && item.type !== 'reminder') return;
+            
+            if (currentCategoryFilter === 'law' && item.category !== 'law') return;
+            if (currentCategoryFilter === 'other' && item.category === 'law') return;
+
+            const tr = document.createElement('tr');
+            
+            if (item.importance === "3" && currentFilter !== 'archive') {
+                tr.classList.add('row-priority-high');
+            } else if (item.category === 'law' && currentFilter !== 'archive') {
+                tr.classList.add('row-is-law');
+            }
+            
+            let statusClass = 'status-todo';
+            if(item.status === 'doing') statusClass = 'status-doing';
+            if(item.status === 'done') statusClass = 'status-done';
+            if(item.status === 'delay') statusClass = 'status-delay';
+            if(item.status === 'archive') statusClass = 'status-archive';
+
+            let lightIcon = getAutoLight(item.reqDate, item.status, item.type);
+
+            if (currentFilter === 'archive') {
+                tr.innerHTML = `
+                    <td style="text-align:center;"><span class="light-indicator">⚪</span></td>
+                    <td><div class="readonly-text">${getImportanceLabel(item.importance)}</div></td>
+                    <td>
+                        <span class="cat-badge ${item.category === 'law' ? 'cat-law' : 'cat-other'}">${item.category === 'law' ? '⚖️ 法規' : '📝 其他'}</span><br>
+                        <span class="type-badge ${item.type === 'assign' ? 'type-assign' : (item.type === 'reminder' ? 'type-reminder' : 'type-general')}">${item.type === 'assign' ? '👉 指派' : (item.type === 'reminder' ? '💡 提醒' : '📝 一般')}</span>
+                    </td>
+                    <td><div class="readonly-text">${item.project || '-'}</div></td>
+                    <td><div class="readonly-text">${item.task}</div></td>
+                    <td><div class="readonly-text">${item.owner}</div></td>
+                    <td><div class="readonly-text">${item.reqDate || '-'}</div></td>
+                    <td><div class="readonly-text">${item.promiseDate || '-'}</div></td>
+                    <td><span class="status-select status-archive" style="display:inline-block; text-align:center; padding:6px 0; width:125px;">📦 已結案歸檔</span></td>
+                    <td><div class="readonly-text">${item.note}<br><small style="color:gray;">歸檔時間: ${item.finalArchivedTime}</small></div></td>
+                    <td><button class="btn-delete" onclick="deleteArchivedTask(${item.id})">刪除</button></td>
+                `;
+            } else {
+                const dateCellsHtml = (currentFilter === 'reminder') ? '' : `
+                    <td><input type="date" class="inline-edit-input" value="${item.reqDate || ''}" onchange="updateField(${item.id}, 'reqDate', this.value)"></td>
+                    <td><input type="date" class="inline-edit-input" value="${item.promiseDate || ''}" onchange="updateField(${item.id}, 'promiseDate', this.value)"></td>
+                `;
+
+                const statusCellHtml = (currentFilter === 'reminder') ? '' : `
+                    <td>
+                        <select class="status-select ${statusClass}" onchange="updateStatus(${item.id}, this.value)">
+                            <option value="todo" ${item.status === 'todo' ? 'selected' : ''}>❌ 未開始</option>
+                            <option value="doing" ${item.status === 'doing' ? 'selected' : ''}>⚡ 進行中</option>
+                            <option value="done" ${item.status === 'done' ? 'selected' : ''}>✅ 已完成</option>
+                            <option value="delay" ${item.status === 'delay' ? 'selected' : ''}>⚠️ 異常卡關</option>
+                            <option value="archive" ${item.status === 'archive' ? 'selected' : ''}>📦 結案待歸檔</option>
+                        </select>
+                    </td>
+                `;
+
+                tr.innerHTML = `
+                    <td style="text-align:center;"><span class="light-indicator">${lightIcon}</span></td>
+                    <td>
+                        <select style="padding: 4px; font-size:13px; font-weight:bold; color:#e67e22;" onchange="updateField(${item.id}, 'importance', this.value)">
+                            <option value="3" ${item.importance === '3' ? 'selected' : ''}>★★★ 高</option>
+                            <option value="2" ${item.importance === '2' ? 'selected' : ''}>★★ 中</option>
+                            <option value="1" ${item.importance === '1' ? 'selected' : ''}>★ 低</option>
+                        </select>
+                    </td>
+                    <td>
+                        <select style="padding: 2px; font-size:11px; font-weight:bold; margin-bottom:4px;" onchange="updateField(${item.id}, 'category', this.value); renderTable();">
+                            <option value="law" ${item.category === 'law' ? 'selected' : ''}>⚖️ 法規</option>
+                            <option value="other" ${item.category === 'other' ? 'selected' : ''}>📝 其他</option>
+                        </select><br>
+                        <select style="padding: 2px; font-size:11px;" onchange="updateField(${item.id}, 'type', this.value); renderTable();">
+                            <option value="general" ${item.type === 'general' ? 'selected' : ''}>📝 一般</option>
+                            <option value="assign" ${item.type === 'assign' ? 'selected' : ''}>👉 指派</option>
+                            <option value="reminder" ${item.type === 'reminder' ? 'selected' : ''}>💡 提醒</option>
+                        </select>
+                    </td>
+                    <td><textarea class="inline-edit-area" onchange="updateField(${item.id}, 'project', this.value)">${item.project || ''}</textarea></td>
+                    <td><textarea class="inline-edit-area" onchange="updateField(${item.id}, 'task', this.value)" oninput="autoResizeTextarea(this)">${item.task}</textarea></td>
+                    <td><textarea class="inline-edit-area" onchange="updateField(${item.id}, 'owner', this.value)" oninput="autoResizeTextarea(this)">${item.owner}</textarea></td>
+                    ${dateCellsHtml}
+                    ${statusCellHtml}
+                    <td><textarea class="inline-edit-area" onchange="updateField(${item.id}, 'note', this.value)" oninput="autoResizeTextarea(this)" placeholder="點擊更新進度...">${item.note}</textarea></td>
+                    <td><button class="btn-delete" onclick="deleteTask(${item.id})">刪除</button></td>
+                `;
+            }
+            tbody.appendChild(tr);
+        });
+
+        document.querySelectorAll('td textarea.inline-edit-area').forEach(textarea => autoResizeTextarea(textarea));
+    }
+
+    function addTask() {
+        const importance = document.getElementById('taskImportance').value;
+        const category = document.getElementById('taskClass').value;
+        const type = document.getElementById('taskType').value;
+        const project = document.getElementById('project').value;
+        const task = document.getElementById('task').value;
+        const owner = document.getElementById('owner').value;
+        const reqDate = (type === 'reminder') ? '' : document.getElementById('reqDate').value;
+        const promiseDate = (type === 'reminder') ? '' : document.getElementById('promiseDate').value;
+        const note = document.getElementById('note').value;
+
+        if (!task) { alert('請填寫完整內容！'); return; }
+
+        const newTask = {
+            id: Date.now(), importance: importance, category: category, type: type, project: project,
+            task: task, owner: owner, reqDate: reqDate, promiseDate: promiseDate,
+            status: 'todo', note: note, archiveDate: null
+        };
+
+        tasks.push(newTask);
+        if (type === 'reminder') { switchFilter('reminder'); } else { renderTable(); }
+
+        document.getElementById('task').value = '';
+        document.getElementById('owner').value = '';
+        document.getElementById('project').value = '';
+        document.getElementById('reqDate').value = '';
+        document.getElementById('promiseDate').value = '';
+        document.getElementById('note').value = '';
+        saveToStorage();
+    }
+
+    function updateField(id, field, value) {
+        const index = tasks.findIndex(item => item.id === id);
+        if (index !== -1) {
+            tasks[index][field] = value;
+            if (field === 'type' && value === 'reminder') {
+                tasks[index].reqDate = '';
+                tasks[index].promiseDate = '';
+            }
+            saveToStorage();
+        }
+    }
+
+    function updateStatus(id, newStatus) {
+        const index = tasks.findIndex(item => item.id === id);
+        if (index !== -1) {
+            const oldStatus = tasks[index].status;
+            tasks[index].status = newStatus;
+            
+            if (oldStatus !== 'done' && newStatus === 'done' && tasks[index].type === 'assign') {
+                const trackingTask = {
+                    id: Date.now() + Math.random(), importance: tasks[index].importance || "2", category: tasks[index].category || "other",
+                    type: 'general', project: tasks[index].project || '',
+                    task: `【追蹤】確認 ${tasks[index].owner} 執行「${tasks[index].task}」的後續結果與回報`,
+                    owner: '我', reqDate: '', promiseDate: '', status: 'todo',            
+                    note: `系統提示：此項目因完成工作自動生成。`, archiveDate: null
+                };
+                tasks.push(trackingTask);
+                alert(`通知：系統已自動為你生成一筆對應的【追蹤事項】。`);
+            }
+            if (newStatus === 'archive') {
+                tasks[index].archiveDate = new Date().toISOString();
+                alert('已設定為結案待歸檔。');
+            } else { tasks[index].archiveDate = null; }
+            saveToStorage();
+            renderTable();
+        }
+    }
+
+    function deleteTask(id) { if(confirm('確定要刪除嗎？')) { tasks = tasks.filter(item => item.id !== id); renderTable(); saveToStorage(); } }
+    function deleteArchivedTask(id) { if(confirm('確定要永久刪除嗎？')) { archivedTasks = archivedTasks.filter(item => item.id !== id); renderTable(); saveToStorage(); } }
+
+    window.onload = function() {
+        checkThreeDaysAutoArchive(); 
+        renderTable(); 
+    };
+</script>
+
+</body>
+</html>
