@@ -505,7 +505,7 @@
         if (statusHeader) statusHeader.style.display = (currentFilter === 'reminder') ? 'none' : 'table-cell';
 
         dataSource.forEach((item) => {
-            if (currentFilter === 'active' && (item.status === 'archive' || item.type === 'reminder')) return;
+            if (currentFilter === 'active' && (item.status === 'archive' || item.status === 'done' || item.type === 'reminder')) return;
             if (currentFilter === 'done' && (item.status !== 'done' || item.type === 'reminder')) return;
             if (currentFilter === 'reminder' && item.type !== 'reminder') return;
             
