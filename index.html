@@ -390,11 +390,43 @@
 </div>
 
 <script>
+    // ====== 雲端同步設定 ======
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyKrwK3EBQ0E6eCwtSXpr325UBDGsJd92ndBF-Y_gCKqnYEk8spkbx_mc3eWC7hpkv-mQ/exec";
+    const SECRET_KEY = "Asdzxc123";
+
     let currentFilter = 'active';
     let currentCategoryFilter = 'all'; 
     
     let tasks = JSON.parse(localStorage.getItem('kanban_tasks')) || [];
     let archivedTasks = JSON.parse(localStorage.getItem('kanban_archived_tasks')) || [];
+
+    // 上傳目前資料到雲端
+    function syncToGoogleDrive() {
+        if (!GOOGLE_SCRIPT_URL) return;
+        fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: SECRET_KEY, tasks: tasks, archivedTasks: archivedTasks })
+        }).catch(err => console.error('雲端同步失敗:', err));
+    }
+
+    // 從雲端讀取最新資料，並更新畫面
+    function loadFromCloud(callback) {
+        if (!GOOGLE_SCRIPT_URL) { if (callback) callback(); return; }
+        fetch(`${GOOGLE_SCRIPT_URL}?key=${encodeURIComponent(SECRET_KEY)}`)
+            .then(res => res.json())
+            .then(res => {
+                if (res.ok && res.data) {
+                    tasks = res.data.tasks || [];
+                    archivedTasks = res.data.archivedTasks || [];
+                    localStorage.setItem('kanban_tasks', JSON.stringify(tasks));
+                    localStorage.setItem('kanban_archived_tasks', JSON.stringify(archivedTasks));
+                }
+            })
+            .catch(err => console.error('讀取雲端資料失敗:', err))
+            .finally(() => { if (callback) callback(); });
+    }
 
     function toggleDateFields(type) {
         const dateFields = document.querySelectorAll('.date-field');
@@ -478,6 +510,7 @@
     function saveToStorage() {
         localStorage.setItem('kanban_tasks', JSON.stringify(tasks));
         localStorage.setItem('kanban_archived_tasks', JSON.stringify(archivedTasks));
+        syncToGoogleDrive();
     }
 
     function renderTable() {
@@ -671,8 +704,10 @@
     function deleteArchivedTask(id) { if(confirm('確定要永久刪除嗎？')) { archivedTasks = archivedTasks.filter(item => item.id !== id); renderTable(); saveToStorage(); } }
 
     window.onload = function() {
-        checkThreeDaysAutoArchive(); 
-        renderTable(); 
+        loadFromCloud(function() {
+            checkThreeDaysAutoArchive();
+            renderTable();
+        });
     };
 </script>
 
