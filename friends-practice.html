@@ -909,28 +909,4 @@ function playAllLines() {
     const ep = getEpisode(currentEpisodeId);
     let i = 0;
     function playNext() {
-        if (i >= ep.dialogue.length) { listenState.playingIndex = -1; render(); return; }
-        listenState.playingIndex = i;
-        render();
-        const row = document.getElementById('listenLine' + i);
-        if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        speakText(cleanText(ep.dialogue[i].text), () => { i++; playNext(); });
-    }
-    playNext();
-}
-
-function stopPlayback() {
-    if (window.speechSynthesis) speechSynthesis.cancel();
-    listenState.playingIndex = -1;
-    render();
-}
-
-// ============================= Init =============================
-if (window.speechSynthesis) {
-    speechSynthesis.onvoiceschanged = () => { if (currentMode === 'listen') render(); };
-}
-
-render();
-</script>
-</body>
-</html>
+        if (i >= ep.dialogue.length) {
