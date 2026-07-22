@@ -526,8 +526,8 @@ function switchMode(mode) {
     render();
 }
 
-// ============================= Cloze mode =============================
-function makeClozeQuestion(line) {
+// ============================= Cloze mode (multiple choice) =============================
+function makeClozeQuestion(line, ep) {
     const clean = cleanText(line.text);
     const words = clean.split(/\s+/).filter(Boolean);
     const candidates = [];
@@ -540,43 +540,62 @@ function makeClozeQuestion(line) {
     const answer = normalizeWord(words[idx]);
     const displayWords = words.slice();
     displayWords[idx] = '_____';
-    return { speaker: line.speaker, sentence: displayWords.join(' '), answer };
+    const pool = ep.vocab.map(v => v.word).filter(w => w !== answer);
+    const distractors = sample(pool, Math.min(3, pool.length));
+    const options = shuffle([answer, ...distractors]);
+    return { speaker: line.speaker, sentence: displayWords.join(' '), answer, options };
 }
 
 function generateClozeSet(ep) {
     const eligible = ep.dialogue.filter(d => cleanText(d.text).split(/\s+/).length >= 3);
     const picked = sample(eligible, Math.min(10, eligible.length));
-    const questions = picked.map(makeClozeQuestion).filter(Boolean).map(q => ({ ...q, userAnswer: '', checked: false, correct: null }));
+    const questions = picked
+        .map(line => makeClozeQuestion(line, ep))
+        .filter(q => q && q.options.length >= 2)
+        .map(q => ({ ...q, checked: false, correct: null, selected: null }));
     clozeState = { questions, score: 0, answered: 0 };
 }
 
 function renderCloze(container, ep) {
     if (clozeState.questions.length === 0) generateClozeSet(ep);
+    if (clozeState.questions.length === 0) {
+        container.innerHTML = `<div class="card empty-state">Not enough vocabulary in this episode to build cloze questions yet.</div>`;
+        return;
+    }
     let html = `<div class="card">
         <div class="flex-row" style="justify-content:space-between;margin-bottom:10px;">
             <span class="score-badge">Score: ${clozeState.score} / ${clozeState.answered}</span>
             <button class="btn btn-accent" onclick="regenerateCloze()">🔄 New Set</button>
         </div>`;
     clozeState.questions.forEach((q, i) => {
-        const stateClass = q.checked ? (q.correct ? 'correct' : 'incorrect') : '';
         html += `<div class="cloze-q">
             <div class="speaker">${escapeHtml(q.speaker)}</div>
-            <div class="sentence">${escapeHtml(q.sentence).replace('_____', `<input type="text" class="blank-input ${stateClass}" id="clozeInput${i}" value="${escapeHtml(q.userAnswer)}" ${q.checked ? 'disabled' : ''} onkeydown="if(event.key==='Enter')checkClozeAnswer(${i})">`)}</div>
-            ${!q.checked ? `<div style="margin-top:8px;"><button class="btn btn-secondary" onclick="checkClozeAnswer(${i})">Check</button></div>` : ''}
-            ${q.checked ? `<div class="feedback ${q.correct ? 'correct' : 'incorrect'}">${q.correct ? '✅ Correct!' : `❌ Correct answer: <strong>${escapeHtml(q.answer)}</strong>`}</div>` : ''}
-        </div>`;
+            <div class="sentence">${escapeHtml(q.sentence)}</div>
+            <div class="quiz-options" style="margin-top:10px;">`;
+        q.options.forEach(opt => {
+            let cls = '';
+            if (q.checked) {
+                if (opt === q.answer) cls = 'reveal-correct';
+                else if (opt === q.selected && opt !== q.answer) cls = 'selected-incorrect';
+            }
+            html += `<button class="quiz-opt ${cls}" ${q.checked ? 'disabled' : ''} onclick="checkClozeAnswer(${i}, '${encodeURIComponent(opt)}')">${escapeHtml(opt)}</button>`;
+        });
+        html += `</div>`;
+        if (q.checked) {
+            html += `<div class="feedback ${q.correct ? 'correct' : 'incorrect'}">${q.correct ? '✅ Correct!' : `❌ Correct answer: <strong>${escapeHtml(q.answer)}</strong>`}</div>`;
+        }
+        html += `</div>`;
     });
     html += '</div>';
     container.innerHTML = html;
 }
 
-function checkClozeAnswer(i) {
+function checkClozeAnswer(i, encodedOpt) {
     const q = clozeState.questions[i];
     if (q.checked) return;
-    const input = document.getElementById('clozeInput' + i);
-    const val = normalizeWord(input.value.trim());
-    q.userAnswer = input.value.trim();
-    q.correct = val === q.answer;
+    const opt = decodeURIComponent(encodedOpt);
+    q.selected = opt;
+    q.correct = opt === q.answer;
     q.checked = true;
     clozeState.answered++;
     if (q.correct) clozeState.score++;
