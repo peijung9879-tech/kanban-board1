@@ -285,6 +285,123 @@
             line-height: 1.4;
             white-space: pre-wrap;
         }
+
+        /* ====== 時間軸 (Gantt) 樣式 ====== */
+        #timelineContainer {
+            margin-top: 10px;
+            overflow-x: auto;
+            border: 1px solid #e2e3e5;
+            border-radius: 6px;
+            padding-bottom: 10px;
+        }
+        .gantt-legend {
+            display: flex;
+            gap: 18px;
+            align-items: center;
+            padding: 10px 16px;
+            font-size: 13px;
+            color: #555;
+            border-bottom: 1px solid #eee;
+            flex-wrap: wrap;
+        }
+        .gantt-legend span.dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+        .gantt-empty {
+            text-align: center;
+            color: #888;
+            padding: 50px 20px;
+            font-size: 15px;
+        }
+        .gantt-row-label {
+            width: 230px;
+            flex-shrink: 0;
+            padding: 0 12px;
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            border-right: 1px solid #eee;
+            box-sizing: border-box;
+        }
+        .gantt-row {
+            display: flex;
+            align-items: center;
+            height: 42px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .gantt-row:hover { background-color: #f7f9fa; }
+        .gantt-bar {
+            position: absolute;
+            top: 9px;
+            height: 24px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 6px;
+            box-sizing: border-box;
+            color: white;
+            font-size: 11px;
+            font-weight: bold;
+            white-space: nowrap;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .gantt-axis-cell {
+            position: absolute;
+            top: 0;
+            text-align: center;
+            font-size: 11px;
+            color: #777;
+            border-left: 1px solid #eee;
+            height: 100%;
+            padding-top: 6px;
+            box-sizing: border-box;
+        }
+        .gantt-today-line {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background-color: #3498db;
+            z-index: 5;
+        }
+        .gantt-group-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            cursor: pointer;
+            user-select: none;
+            font-size: 14px;
+            transition: filter 0.15s;
+        }
+        .gantt-group-header:hover { filter: brightness(0.97); }
+        .gantt-group-count {
+            color: white;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        .gantt-today-tag {
+            position: absolute;
+            top: 4px;
+            background: #3498db;
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 1px 5px;
+            border-radius: 3px;
+            transform: translateX(-50%);
+            z-index: 6;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -300,6 +417,7 @@
         <button id="filterDone" class="btn-filter" onclick="switchFilter('done')">✅ 只看已完成</button>
         <button id="filterReminder" class="btn-filter" onclick="switchFilter('reminder')">💡 提醒事項區</button>
         <button id="filterArchive" class="btn-filter" onclick="switchFilter('archive')">📦 歷史結案區</button>
+        <button id="filterTimeline" class="btn-filter" onclick="switchFilter('timeline')">📊 待辦時間軸</button>
     </div>
 
     <!-- 第二行：獨立類別篩選行 -->
@@ -387,6 +505,9 @@
         <tbody id="taskRows">
         </tbody>
     </table>
+
+    <!-- 待辦時間軸 (Gantt) 檢視 -->
+    <div id="timelineContainer" style="display:none;"></div>
 </div>
 
 <script>
@@ -495,8 +616,11 @@
         document.getElementById('filterDone').classList.toggle('active', mode === 'done');
         document.getElementById('filterReminder').classList.toggle('active', mode === 'reminder');
         document.getElementById('filterArchive').classList.toggle('active', mode === 'archive');
-        document.getElementById('inputFormSection').style.display = (mode === 'archive') ? 'none' : 'block';
-        renderTable();
+        document.getElementById('filterTimeline').classList.toggle('active', mode === 'timeline');
+        document.getElementById('inputFormSection').style.display = (mode === 'archive' || mode === 'timeline') ? 'none' : 'block';
+        document.getElementById('kanbanTable').style.display = (mode === 'timeline') ? 'none' : 'table';
+        document.getElementById('timelineContainer').style.display = (mode === 'timeline') ? 'block' : 'none';
+        render();
     }
 
     function switchCategoryFilter(catMode) {
@@ -504,13 +628,22 @@
         document.getElementById('catFilterAll').classList.toggle('active-law', catMode === 'all');
         document.getElementById('catFilterLaw').classList.toggle('active-law', catMode === 'law');
         document.getElementById('catFilterOther').classList.toggle('active-other', catMode === 'other');
-        renderTable();
+        render();
     }
 
     function saveToStorage() {
         localStorage.setItem('kanban_tasks', JSON.stringify(tasks));
         localStorage.setItem('kanban_archived_tasks', JSON.stringify(archivedTasks));
         syncToGoogleDrive();
+    }
+
+    // 統一渲染入口：依目前頁籤決定要畫表格還是時間軸
+    function render() {
+        if (currentFilter === 'timeline') {
+            renderTimeline();
+        } else {
+            renderTable();
+        }
     }
 
     function renderTable() {
@@ -606,11 +739,11 @@
                         </select>
                     </td>
                     <td>
-                        <select style="padding: 2px; font-size:11px; font-weight:bold; margin-bottom:4px;" onchange="updateField(${item.id}, 'category', this.value); renderTable();">
+                        <select style="padding: 2px; font-size:11px; font-weight:bold; margin-bottom:4px;" onchange="updateField(${item.id}, 'category', this.value); render();">
                             <option value="law" ${item.category === 'law' ? 'selected' : ''}>⚖️ 法規</option>
                             <option value="other" ${item.category === 'other' ? 'selected' : ''}>📝 其他</option>
                         </select><br>
-                        <select style="padding: 2px; font-size:11px;" onchange="updateField(${item.id}, 'type', this.value); renderTable();">
+                        <select style="padding: 2px; font-size:11px;" onchange="updateField(${item.id}, 'type', this.value); render();">
                             <option value="general" ${item.type === 'general' ? 'selected' : ''}>📝 一般</option>
                             <option value="assign" ${item.type === 'assign' ? 'selected' : ''}>👉 指派</option>
                             <option value="reminder" ${item.type === 'reminder' ? 'selected' : ''}>💡 提醒</option>
@@ -629,6 +762,154 @@
         });
 
         document.querySelectorAll('td textarea.inline-edit-area').forEach(textarea => autoResizeTextarea(textarea));
+    }
+
+    // ====== 待辦時間軸 (橫向 Gantt，依「要求日」倒數) ======
+    // 時間軸分組收合狀態：預設「尚有餘裕」先收合，避免一次全部塞在一起
+    let ganttCollapsed = { overdue: false, urgent: false, later: true };
+
+    function toggleGanttGroup(key) {
+        ganttCollapsed[key] = !ganttCollapsed[key];
+        renderTimeline();
+    }
+
+    function renderTimeline() {
+        const container = document.getElementById('timelineContainer');
+        container.innerHTML = '';
+
+        // 只顯示：非提醒事項、未完成(todo/doing/delay)、且有填要求日
+        let items = tasks.filter(t =>
+            t.type !== 'reminder' &&
+            t.status !== 'done' &&
+            t.status !== 'archive' &&
+            t.reqDate
+        );
+
+        if (currentCategoryFilter === 'law') items = items.filter(t => t.category === 'law');
+        if (currentCategoryFilter === 'other') items = items.filter(t => t.category !== 'law');
+
+        // 圖例
+        const legendHtml = `
+            <div class="gantt-legend">
+                <span><span class="dot" style="background:#c0392b;"></span>已逾期</span>
+                <span><span class="dot" style="background:#e74c3c;"></span>3天內到期</span>
+                <span><span class="dot" style="background:#27ae60;"></span>尚有餘裕</span>
+                <span><span class="dot" style="background:#3498db;"></span>今天</span>
+                <span style="margin-left:auto; color:#999; font-size:12px;">💡 點區塊標題可展開/收合</span>
+            </div>`;
+
+        if (items.length === 0) {
+            container.innerHTML = legendHtml + `<div class="gantt-empty">目前沒有已設定「要求日」的進行中事項</div>`;
+            return;
+        }
+
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+
+        // 依緊急程度分成三組，分開顯示，避免全部塞在一起
+        const overdueItems = [];
+        const urgentItems = [];
+        const laterItems = [];
+        items.forEach(it => {
+            const reqD = new Date(it.reqDate); reqD.setHours(0, 0, 0, 0);
+            const diffDays = Math.round((reqD - today) / 86400000);
+            it._diffDays = diffDays;
+            if (diffDays < 0) overdueItems.push(it);
+            else if (diffDays <= 3) urgentItems.push(it);
+            else laterItems.push(it);
+        });
+        [overdueItems, urgentItems, laterItems].forEach(arr => arr.sort((a, b) => new Date(a.reqDate) - new Date(b.reqDate)));
+
+        // 統一計算日期軸範圍（涵蓋全部項目，讓每組刻度一致好對照）
+        let minDate = new Date(today);
+        let maxDate = new Date(today);
+        items.forEach(it => {
+            const d = new Date(it.reqDate); d.setHours(0, 0, 0, 0);
+            if (d < minDate) minDate = new Date(d);
+            if (d > maxDate) maxDate = new Date(d);
+        });
+        minDate.setDate(minDate.getDate() - 1);
+        maxDate.setDate(maxDate.getDate() + 2);
+
+        const totalDays = Math.max(1, Math.round((maxDate - minDate) / 86400000));
+        const dayWidth = 46;
+        const chartWidth = totalDays * dayWidth;
+        const labelWidth = 230;
+        const todayOffset = Math.round((today - minDate) / 86400000) * dayWidth;
+
+        function buildAxisHtml() {
+            let html = `<div style="position:relative; height:34px; margin-left:${labelWidth}px; width:${chartWidth}px; border-bottom:1px solid #ddd;">`;
+            for (let i = 0; i <= totalDays; i++) {
+                const d = new Date(minDate); d.setDate(d.getDate() + i);
+                const isToday = d.getTime() === today.getTime();
+                html += `<div class="gantt-axis-cell" style="left:${i * dayWidth}px; width:${dayWidth}px; ${isToday ? 'font-weight:bold;color:#3498db;' : ''}">${d.getMonth() + 1}/${d.getDate()}</div>`;
+            }
+            html += `</div>`;
+            return html;
+        }
+
+        function buildRowHtml(it) {
+            const diffDays = it._diffDays;
+            const reqD = new Date(it.reqDate); reqD.setHours(0, 0, 0, 0);
+            const isOverdue = diffDays < 0;
+
+            const barStart = isOverdue ? reqD : today;
+            const barEnd = isOverdue ? today : reqD;
+            const offsetDays = Math.round((barStart - minDate) / 86400000);
+            let spanDays = Math.round((barEnd - barStart) / 86400000);
+            if (spanDays < 1) spanDays = 1;
+
+            let barColor = '#27ae60';
+            if (diffDays < 0) barColor = '#c0392b';
+            else if (diffDays <= 3) barColor = '#e74c3c';
+
+            let barLabel = diffDays < 0 ? `逾期 ${Math.abs(diffDays)} 天` : (diffDays === 0 ? '今天到期' : `剩 ${diffDays} 天`);
+
+            const importanceMark = it.importance === '3' ? '⭐ ' : '';
+            const catMark = it.category === 'law' ? '⚖️ ' : '';
+            const labelText = `${importanceMark}${catMark}${it.project ? '[' + it.project + '] ' : ''}${it.task}`;
+            const safeTitle = labelText.replace(/"/g, '&quot;');
+
+            return `
+                <div class="gantt-row">
+                    <div class="gantt-row-label" title="${safeTitle}">${labelText}</div>
+                    <div style="position:relative; height:100%; width:${chartWidth}px;">
+                        <div class="gantt-bar" style="left:${offsetDays * dayWidth}px; width:${spanDays * dayWidth}px; background:${barColor};" title="要求日: ${it.reqDate}">${barLabel}</div>
+                    </div>
+                </div>`;
+        }
+
+        function buildGroupHtml(key, title, color, arr) {
+            if (arr.length === 0) return '';
+            const collapsed = ganttCollapsed[key];
+            const arrow = collapsed ? '▶' : '▼';
+            let html = `
+                <div class="gantt-group-header" style="background:${color}20; border-left:4px solid ${color};" onclick="toggleGanttGroup('${key}')">
+                    <span style="font-weight:bold; color:${color};">${arrow} ${title}</span>
+                    <span class="gantt-group-count" style="background:${color};">${arr.length} 件</span>
+                </div>`;
+            if (!collapsed) {
+                html += `<div style="position:relative;">${arr.map(buildRowHtml).join('')}</div>`;
+            }
+            return html;
+        }
+
+        const axisHtml = buildAxisHtml();
+        let rowsHtml = `<div style="position:relative;">`;
+        rowsHtml += buildGroupHtml('overdue', '已逾期', '#c0392b', overdueItems);
+        rowsHtml += buildGroupHtml('urgent', '3天內到期', '#e74c3c', urgentItems);
+        rowsHtml += buildGroupHtml('later', '尚有餘裕', '#27ae60', laterItems);
+
+        // 今天的參考線（貫穿整個時間軸區域）
+        rowsHtml += `<div class="gantt-today-line" style="left:${labelWidth + todayOffset}px;"></div>`;
+        rowsHtml += `<div class="gantt-today-tag" style="left:${labelWidth + todayOffset}px;">今天</div>`;
+        rowsHtml += `</div>`;
+
+        container.innerHTML = `
+            ${legendHtml}
+            <div style="min-width:${labelWidth + chartWidth}px; position:relative;">
+                ${axisHtml}
+                ${rowsHtml}
+            </div>`;
     }
 
     function addTask() {
@@ -651,7 +932,7 @@
         };
 
         tasks.push(newTask);
-        if (type === 'reminder') { switchFilter('reminder'); } else { renderTable(); }
+        if (type === 'reminder') { switchFilter('reminder'); } else { render(); }
 
         document.getElementById('task').value = '';
         document.getElementById('owner').value = '';
@@ -696,17 +977,17 @@
                 alert('已設定為結案待歸檔。');
             } else { tasks[index].archiveDate = null; }
             saveToStorage();
-            renderTable();
+            render();
         }
     }
 
-    function deleteTask(id) { if(confirm('確定要刪除嗎？')) { tasks = tasks.filter(item => item.id !== id); renderTable(); saveToStorage(); } }
-    function deleteArchivedTask(id) { if(confirm('確定要永久刪除嗎？')) { archivedTasks = archivedTasks.filter(item => item.id !== id); renderTable(); saveToStorage(); } }
+    function deleteTask(id) { if(confirm('確定要刪除嗎？')) { tasks = tasks.filter(item => item.id !== id); render(); saveToStorage(); } }
+    function deleteArchivedTask(id) { if(confirm('確定要永久刪除嗎？')) { archivedTasks = archivedTasks.filter(item => item.id !== id); render(); saveToStorage(); } }
 
     window.onload = function() {
         loadFromCloud(function() {
             checkThreeDaysAutoArchive();
-            renderTable();
+            render();
         });
     };
 </script>
