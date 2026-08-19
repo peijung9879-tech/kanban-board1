@@ -186,8 +186,9 @@
         tr.row-is-law:hover { background-color: #eafeff; }
 
         /* 今日待辦凸顯（優先層級最高） */
-        tr.row-is-today { background-color: #fff3e0 !important; }
+        tr.row-is-today { background-color: #fff3e0 !important; box-shadow: inset 5px 0 0 #f39c12; }
         tr.row-is-today:hover { background-color: #ffe6c7 !important; }
+        tr.row-is-today td:nth-child(6) { font-weight: bold; }
         
         tr:nth-child(even):not(.row-is-law):not(.row-priority-high):not(.row-is-today) { background-color: #f9f9f9; }
         tr:hover:not(.row-is-law):not(.row-priority-high):not(.row-is-today) { background-color: #f1f1f1; }
@@ -303,6 +304,10 @@
             transition: transform 0.15s;
         }
         .today-star-btn:hover { transform: scale(1.2); }
+        .today-star-btn.is-active {
+            font-size: 26px;
+            filter: drop-shadow(0 0 3px rgba(243, 156, 18, 0.7));
+        }
 
         /* ====== 時間軸 (Gantt) 樣式 ====== */
         #timelineContainer {
@@ -676,6 +681,9 @@
         
         if (currentFilter !== 'archive') {
             dataSource.sort((a, b) => {
+                const todayA = a.today ? 1 : 0;
+                const todayB = b.today ? 1 : 0;
+                if (todayB !== todayA) return todayB - todayA;
                 const impA = parseInt(a.importance) || 2;
                 const impB = parseInt(b.importance) || 2;
                 if (impB !== impA) return impB - impA; 
@@ -757,7 +765,7 @@
 
                 tr.innerHTML = `
                     <td style="text-align:center;">
-                        <button class="today-star-btn" onclick="toggleToday(${item.id})" title="標記為今日待辦">${item.today ? '⭐' : '☆'}</button>
+                        <button class="today-star-btn ${item.today ? 'is-active' : ''}" onclick="toggleToday(${item.id})" title="標記為今日待辦">${item.today ? '⭐' : '☆'}</button>
                     </td>
                     <td style="text-align:center;"><span class="light-indicator">${lightIcon}</span></td>
                     <td>
