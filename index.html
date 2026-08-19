@@ -184,9 +184,13 @@
         /* 法規專屬淡藍底色凸顯 */
         tr.row-is-law { background-color: #f4f9fd; }
         tr.row-is-law:hover { background-color: #eafeff; }
+
+        /* 今日待辦凸顯（優先層級最高） */
+        tr.row-is-today { background-color: #fff3e0 !important; }
+        tr.row-is-today:hover { background-color: #ffe6c7 !important; }
         
-        tr:nth-child(even):not(.row-is-law):not(.row-priority-high) { background-color: #f9f9f9; }
-        tr:hover:not(.row-is-law):not(.row-priority-high) { background-color: #f1f1f1; }
+        tr:nth-child(even):not(.row-is-law):not(.row-priority-high):not(.row-is-today) { background-color: #f9f9f9; }
+        tr:hover:not(.row-is-law):not(.row-priority-high):not(.row-is-today) { background-color: #f1f1f1; }
         
         .status-select {
             font-weight: bold;
@@ -285,6 +289,20 @@
             line-height: 1.4;
             white-space: pre-wrap;
         }
+
+        /* 今日待辦星星按鈕 */
+        .today-star-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 22px;
+            line-height: 1;
+            padding: 4px;
+            display: block;
+            margin: 0 auto;
+            transition: transform 0.15s;
+        }
+        .today-star-btn:hover { transform: scale(1.2); }
 
         /* ====== 時間軸 (Gantt) 樣式 ====== */
         #timelineContainer {
@@ -414,6 +432,7 @@
     <!-- 第一行：主功能狀態頁籤 -->
     <div class="filter-section">
         <button id="filterActive" class="btn-filter active" onclick="switchFilter('active')">🔍 進行中 / 全部</button>
+        <button id="filterToday" class="btn-filter" onclick="switchFilter('today')">🌟 今日待辦</button>
         <button id="filterDone" class="btn-filter" onclick="switchFilter('done')">✅ 只看已完成</button>
         <button id="filterReminder" class="btn-filter" onclick="switchFilter('reminder')">💡 提醒事項區</button>
         <button id="filterArchive" class="btn-filter" onclick="switchFilter('archive')">📦 歷史結案區</button>
@@ -489,6 +508,7 @@
     <table id="kanbanTable">
         <thead>
             <tr>
+                <th style="width: 55px; text-align: center;">今日</th>
                 <th style="width: 60px; text-align: center;">狀態</th>
                 <th style="width: 100px;">重要性</th>
                 <th style="width: 110px;">類別/類型</th>
@@ -593,15 +613,6 @@
                 if (now - archiveTime >= threeDaysMs) {
                     let oldTask = { ...tasks[i], finalArchivedTime: new Date().toLocaleString() };
                     archivedTasks.push(oldTask);
-
-                    let newCase = {
-                        id: Date.now() + Math.random(), importance: tasks[i].importance || "2",
-                        category: tasks[i].category || "other", type: tasks[i].type || 'general',
-                        project: tasks[i].project || '', task: `【新案件續辦】自動產生的後續任務`,
-                        owner: tasks[i].owner, reqDate: '', promiseDate: '', status: 'todo',
-                        note: `由前案結案自動產件。`, archiveDate: null
-                    };
-                    tasks.push(newCase);
                     tasks.splice(i, 1);
                     changed = true;
                 }
@@ -613,6 +624,7 @@
     function switchFilter(mode) {
         currentFilter = mode;
         document.getElementById('filterActive').classList.toggle('active', mode === 'active');
+        document.getElementById('filterToday').classList.toggle('active', mode === 'today');
         document.getElementById('filterDone').classList.toggle('active', mode === 'done');
         document.getElementById('filterReminder').classList.toggle('active', mode === 'reminder');
         document.getElementById('filterArchive').classList.toggle('active', mode === 'archive');
@@ -635,6 +647,16 @@
         localStorage.setItem('kanban_tasks', JSON.stringify(tasks));
         localStorage.setItem('kanban_archived_tasks', JSON.stringify(archivedTasks));
         syncToGoogleDrive();
+    }
+
+    // 切換「今日待辦」標記
+    function toggleToday(id) {
+        const index = tasks.findIndex(item => item.id === id);
+        if (index !== -1) {
+            tasks[index].today = !tasks[index].today;
+            saveToStorage();
+            render();
+        }
     }
 
     // 統一渲染入口：依目前頁籤決定要畫表格還是時間軸
@@ -672,6 +694,7 @@
 
         dataSource.forEach((item) => {
             if (currentFilter === 'active' && (item.status === 'archive' || item.status === 'done' || item.type === 'reminder')) return;
+            if (currentFilter === 'today' && (!item.today || item.status === 'archive' || item.status === 'done' || item.type === 'reminder')) return;
             if (currentFilter === 'done' && (item.status !== 'done' || item.type === 'reminder')) return;
             if (currentFilter === 'reminder' && item.type !== 'reminder') return;
             
@@ -680,7 +703,9 @@
 
             const tr = document.createElement('tr');
             
-            if (item.importance === "3" && currentFilter !== 'archive') {
+            if (item.today && currentFilter !== 'archive') {
+                tr.classList.add('row-is-today');
+            } else if (item.importance === "3" && currentFilter !== 'archive') {
                 tr.classList.add('row-priority-high');
             } else if (item.category === 'law' && currentFilter !== 'archive') {
                 tr.classList.add('row-is-law');
@@ -696,6 +721,7 @@
 
             if (currentFilter === 'archive') {
                 tr.innerHTML = `
+                    <td style="text-align:center;">-</td>
                     <td style="text-align:center;"><span class="light-indicator">⚪</span></td>
                     <td><div class="readonly-text">${getImportanceLabel(item.importance)}</div></td>
                     <td>
@@ -730,6 +756,9 @@
                 `;
 
                 tr.innerHTML = `
+                    <td style="text-align:center;">
+                        <button class="today-star-btn" onclick="toggleToday(${item.id})" title="標記為今日待辦">${item.today ? '⭐' : '☆'}</button>
+                    </td>
                     <td style="text-align:center;"><span class="light-indicator">${lightIcon}</span></td>
                     <td>
                         <select style="padding: 4px; font-size:13px; font-weight:bold; color:#e67e22;" onchange="updateField(${item.id}, 'importance', this.value)">
@@ -765,7 +794,6 @@
     }
 
     // ====== 待辦時間軸 (橫向 Gantt，依「要求日」倒數) ======
-    // 時間軸分組收合狀態：預設「尚有餘裕」先收合，避免一次全部塞在一起
     let ganttCollapsed = { overdue: false, urgent: false, later: true };
 
     function toggleGanttGroup(key) {
@@ -777,7 +805,6 @@
         const container = document.getElementById('timelineContainer');
         container.innerHTML = '';
 
-        // 只顯示：非提醒事項、未完成(todo/doing/delay)、且有填要求日
         let items = tasks.filter(t =>
             t.type !== 'reminder' &&
             t.status !== 'done' &&
@@ -788,7 +815,6 @@
         if (currentCategoryFilter === 'law') items = items.filter(t => t.category === 'law');
         if (currentCategoryFilter === 'other') items = items.filter(t => t.category !== 'law');
 
-        // 圖例
         const legendHtml = `
             <div class="gantt-legend">
                 <span><span class="dot" style="background:#c0392b;"></span>已逾期</span>
@@ -805,7 +831,6 @@
 
         const today = new Date(); today.setHours(0, 0, 0, 0);
 
-        // 依緊急程度分成三組，分開顯示，避免全部塞在一起
         const overdueItems = [];
         const urgentItems = [];
         const laterItems = [];
@@ -819,7 +844,6 @@
         });
         [overdueItems, urgentItems, laterItems].forEach(arr => arr.sort((a, b) => new Date(a.reqDate) - new Date(b.reqDate)));
 
-        // 統一計算日期軸範圍（涵蓋全部項目，讓每組刻度一致好對照）
         let minDate = new Date(today);
         let maxDate = new Date(today);
         items.forEach(it => {
@@ -899,7 +923,6 @@
         rowsHtml += buildGroupHtml('urgent', '3天內到期', '#e74c3c', urgentItems);
         rowsHtml += buildGroupHtml('later', '尚有餘裕', '#27ae60', laterItems);
 
-        // 今天的參考線（貫穿整個時間軸區域）
         rowsHtml += `<div class="gantt-today-line" style="left:${labelWidth + todayOffset}px;"></div>`;
         rowsHtml += `<div class="gantt-today-tag" style="left:${labelWidth + todayOffset}px;">今天</div>`;
         rowsHtml += `</div>`;
@@ -928,7 +951,7 @@
         const newTask = {
             id: Date.now(), importance: importance, category: category, type: type, project: project,
             task: task, owner: owner, reqDate: reqDate, promiseDate: promiseDate,
-            status: 'todo', note: note, archiveDate: null
+            status: 'todo', note: note, archiveDate: null, today: false
         };
 
         tasks.push(newTask);
@@ -967,7 +990,7 @@
                     type: 'general', project: tasks[index].project || '',
                     task: `【追蹤】確認 ${tasks[index].owner} 執行「${tasks[index].task}」的後續結果與回報`,
                     owner: '我', reqDate: '', promiseDate: '', status: 'todo',            
-                    note: `系統提示：此項目因完成工作自動生成。`, archiveDate: null
+                    note: `系統提示：此項目因完成工作自動生成。`, archiveDate: null, today: false
                 };
                 tasks.push(trackingTask);
                 alert(`通知：系統已自動為你生成一筆對應的【追蹤事項】。`);
