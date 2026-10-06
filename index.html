@@ -309,6 +309,122 @@
             filter: drop-shadow(0 0 3px rgba(243, 156, 18, 0.7));
         }
 
+        /* ====== 附件（貼圖 / 檔案）樣式 ====== */
+        .att-area {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 6px;
+        }
+        .att-area:empty { margin-top: 0; }
+        .att-thumb {
+            position: relative;
+            width: 72px;
+            height: 72px;
+            border: 1px solid #d0d5da;
+            border-radius: 6px;
+            overflow: hidden;
+            background: #eef1f3;
+            cursor: zoom-in;
+            flex-shrink: 0;
+        }
+        .att-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            font-size: 10px;
+            color: #888;
+        }
+        .att-chip {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            max-width: 170px;
+            padding: 6px 24px 6px 8px;
+            border: 1px solid #d0d5da;
+            border-radius: 6px;
+            background: #f5f7f8;
+            font-size: 12px;
+            color: #333;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .att-chip:hover, .att-thumb:hover { border-color: #3498db; }
+        .att-del {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 18px;
+            height: 18px;
+            line-height: 16px;
+            padding: 0;
+            border: none;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.55);
+            color: #fff;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .att-del:hover { background: #e74c3c; }
+        .att-uploading {
+            font-size: 12px;
+            color: #888;
+            align-self: center;
+        }
+        .att-add-btn {
+            display: inline-block;
+            margin: 6px 0 0;
+            padding: 3px 8px;
+            font-size: 12px;
+            font-weight: normal;
+            color: #2980b9;
+            border: 1px dashed #9bc4e2;
+            border-radius: 4px;
+            background: #f4f9fd;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .att-add-btn:hover { background: #e3f1fb; }
+        .att-hint {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+        .att-drop-hover {
+            outline: 2px dashed #3498db;
+            outline-offset: -3px;
+            background: #eaf4fc;
+        }
+        #lightbox {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.82);
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 12px;
+        }
+        #lightbox img {
+            max-width: 92vw;
+            max-height: 82vh;
+            border-radius: 6px;
+            background: #fff;
+        }
+        #lightbox .lb-bar { display: flex; gap: 10px; }
+        #lightbox button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
         /* ====== 時間軸 (Gantt) 樣式 ====== */
         #timelineContainer {
             margin-top: 10px;
@@ -500,9 +616,14 @@
         </div>
         
         <div class="form-row">
-            <div class="form-group flex-2">
+            <div class="form-group flex-2" ondragover="attDragOver(event)" ondragleave="attDragLeave(event)" ondrop="attDropForm(event)">
                 <label for="note">備註</label>
-                <textarea id="note" placeholder="每日進度簡述或備註..."></textarea>
+                <textarea id="note" placeholder="每日進度簡述或備註...（可直接 Ctrl+V 貼上圖片）" onpaste="handleFormPaste(event)"></textarea>
+                <div class="att-area" id="formAttArea"></div>
+                <div>
+                    <label class="att-add-btn">📎 加附件（圖片 / 檔案）<input type="file" multiple style="display:none" onchange="handleFormFiles(this)"></label>
+                    <span class="att-hint">也可以把檔案拖曳到這裡</span>
+                </div>
             </div>
             <div style="display: flex; align-items: flex-end;">
                 <button class="btn-add" onclick="addTask()">➕ 新增事項</button>
@@ -535,10 +656,317 @@
     <div id="timelineContainer" style="display:none;"></div>
 </div>
 
+<!-- 附件放大預覽 -->
+<div id="lightbox" onclick="closeLightbox()">
+    <img id="lightboxImg" alt="" onclick="event.stopPropagation()">
+    <div class="lb-bar" onclick="event.stopPropagation()">
+        <button id="lightboxDownload" style="background:#18bc9c;color:#fff;">⬇ 下載</button>
+        <button onclick="closeLightbox()" style="background:#e2e3e5;color:#333;">關閉</button>
+    </div>
+</div>
+
 <script>
     // ====== 雲端同步設定 ======
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxTRcR5PGaClDBlAqgrxr6U28yHSZ6FeMS_18sWmtZOU4vcH0Vv4mBjMhfFnpBfo1mmuQ/exec";
     const SECRET_KEY = "Asdzxc123";
+
+    // ====== 附件功能（圖片 / 檔案存到 Google 雲端硬碟，事項只記錄檔案編號）======
+    const MAX_FILE_BYTES = 8 * 1024 * 1024;     // 非圖片檔上限 8MB
+    const fileCache = new Map();                // 檔案編號 -> { url, blob, mime, name }
+    const inflightFetch = new Map();            // 檔案編號 -> Promise
+    const pendingUploads = {};                  // 事項編號 -> 上傳中的數量
+    let pendingForm = [];                       // 新增表單中尚未送出的附件
+    let formUploading = 0;
+    let activeFetch = 0;
+    const fetchQueue = [];
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+    function shortName(n) {
+        n = String(n || '檔案');
+        return n.length > 16 ? n.slice(0, 14) + '…' : n;
+    }
+    function pad2(n) { return String(n).padStart(2, '0'); }
+    function niceName(file) {
+        const name = file.name || '';
+        if (!name || /^image\.(png|jpe?g|gif|webp)$/i.test(name)) {
+            const d = new Date();
+            const ext = (file.type && file.type.split('/')[1]) || 'png';
+            return `貼上圖片_${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}_${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}.${ext}`;
+        }
+        return name;
+    }
+
+    // 同時最多 3 個下載請求，避免一次塞爆 Apps Script
+    function limited(fn) {
+        return new Promise((resolve, reject) => {
+            const run = () => {
+                activeFetch++;
+                fn().then(resolve, reject).finally(() => {
+                    activeFetch--;
+                    if (fetchQueue.length) fetchQueue.shift()();
+                });
+            };
+            if (activeFetch < 3) run(); else fetchQueue.push(run);
+        });
+    }
+
+    function b64ToBlob(b64, mime) {
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return new Blob([bytes], { type: mime || 'application/octet-stream' });
+    }
+    function blobToBase64(blob) {
+        return new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(String(r.result).split(',')[1]);
+            r.onerror = () => reject(new Error('讀取檔案失敗'));
+            r.readAsDataURL(blob);
+        });
+    }
+
+    // 從雲端抓檔案（有快取，同一個檔案只抓一次）
+    function fetchFile(id) {
+        if (fileCache.has(id)) return Promise.resolve(fileCache.get(id));
+        if (inflightFetch.has(id)) return inflightFetch.get(id);
+        const p = limited(() =>
+            fetch(`${GOOGLE_SCRIPT_URL}?key=${encodeURIComponent(SECRET_KEY)}&action=file&id=${encodeURIComponent(id)}`)
+                .then(r => r.json())
+                .then(res => {
+                    if (!res.ok) throw new Error(res.error || '讀取失敗');
+                    const blob = b64ToBlob(res.data, res.mime);
+                    const entry = { url: URL.createObjectURL(blob), blob: blob, mime: res.mime, name: res.name };
+                    fileCache.set(id, entry);
+                    return entry;
+                })
+        ).finally(() => inflightFetch.delete(id));
+        inflightFetch.set(id, p);
+        return p;
+    }
+
+    // 圖片自動縮小（最長邊 1600px）並轉成 JPEG，省空間也上傳得快；GIF 與其他檔案維持原樣
+    function compressImage(file, name) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            const u = URL.createObjectURL(file);
+            img.onload = () => {
+                URL.revokeObjectURL(u);
+                const max = 1600;
+                const scale = Math.min(1, max / Math.max(img.width, img.height));
+                const w = Math.max(1, Math.round(img.width * scale));
+                const h = Math.max(1, Math.round(img.height * scale));
+                const c = document.createElement('canvas');
+                c.width = w; c.height = h;
+                const ctx = c.getContext('2d');
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(0, 0, w, h);
+                ctx.drawImage(img, 0, 0, w, h);
+                c.toBlob(b => {
+                    if (!b) return reject(new Error('圖片壓縮失敗'));
+                    resolve({ name: name.replace(/\.[^.]+$/, '') + '.jpg', mime: 'image/jpeg', blob: b });
+                }, 'image/jpeg', 0.82);
+            };
+            img.onerror = () => { URL.revokeObjectURL(u); reject(new Error('無法讀取圖片')); };
+            img.src = u;
+        });
+    }
+
+    async function prepareFile(file) {
+        const name = niceName(file);
+        if (file.type && file.type.startsWith('image/') && file.type !== 'image/gif') {
+            try { return await compressImage(file, name); } catch (e) { /* 壓縮失敗就用原檔 */ }
+        }
+        if (file.size > MAX_FILE_BYTES) throw new Error(`「${name}」超過 8MB 上限`);
+        return { name: name, mime: file.type || 'application/octet-stream', blob: file };
+    }
+
+    async function cloudUpload(p) {
+        const data = await blobToBase64(p.blob);
+        const res = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ key: SECRET_KEY, action: 'upload', name: p.name, mime: p.mime, data: data })
+        }).then(r => r.json());
+        if (!res.ok) throw new Error(res.error || '上傳失敗');
+        fileCache.set(res.id, { url: URL.createObjectURL(p.blob), blob: p.blob, mime: p.mime, name: p.name });
+        return { id: res.id, name: p.name, mime: p.mime, size: p.blob.size };
+    }
+
+    function uploadErrorMessage(err) {
+        let msg = err && err.message ? err.message : String(err);
+        if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) {
+            msg += '\n（請確認 Apps Script 已貼上新版程式碼並重新部署）';
+        }
+        return msg;
+    }
+
+    function cloudDelete(id) {
+        const entry = fileCache.get(id);
+        if (entry) { URL.revokeObjectURL(entry.url); fileCache.delete(id); }
+        fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            body: JSON.stringify({ key: SECRET_KEY, action: 'delete', id: id })
+        }).catch(() => {});
+    }
+
+    // 產生附件區塊的 HTML（delCall 為 null 代表唯讀）
+    function attHtml(list, uploading, delCall) {
+        let html = (list || []).map(a => {
+            const del = delCall ? `<button class="att-del" title="移除附件" onclick="event.stopPropagation(); ${delCall(a)}">✕</button>` : '';
+            if ((a.mime || '').startsWith('image/')) {
+                return `<div class="att-thumb" title="${esc(a.name)}" onclick="openAttachment('${a.id}')"><img data-fid="${a.id}" alt="載入中…">${del}</div>`;
+            }
+            return `<div class="att-chip" title="${esc(a.name)}" onclick="openAttachment('${a.id}')">📄 ${esc(shortName(a.name))}${del}</div>`;
+        }).join('');
+        if (uploading > 0) html += `<div class="att-uploading">⏳ 上傳中 (${uploading})…</div>`;
+        return html;
+    }
+
+    // 載入畫面上尚未顯示的縮圖
+    function hydrateAttachments() {
+        document.querySelectorAll('img[data-fid]').forEach(img => {
+            if (img.dataset.loaded) return;
+            img.dataset.loaded = '1';
+            fetchFile(img.dataset.fid)
+                .then(f => { img.src = f.url; })
+                .catch(() => { img.alt = '載入失敗'; img.dataset.loaded = ''; });
+        });
+    }
+
+    function refreshAttArea(taskId) {
+        const el = document.getElementById('att-' + taskId);
+        const t = tasks.find(x => x.id === taskId);
+        if (!el || !t) return;
+        el.innerHTML = attHtml(t.attachments, pendingUploads[taskId] || 0, a => `removeAttachment(${t.id}, '${a.id}')`);
+        hydrateAttachments();
+    }
+
+    function renderFormAtt() {
+        const el = document.getElementById('formAttArea');
+        if (!el) return;
+        el.innerHTML = attHtml(pendingForm, formUploading, a => `removeFormAttachment('${a.id}')`);
+        hydrateAttachments();
+    }
+
+    // 對既有事項加附件
+    async function addFilesToTask(taskId, files) {
+        for (const f of files) {
+            pendingUploads[taskId] = (pendingUploads[taskId] || 0) + 1;
+            refreshAttArea(taskId);
+            try {
+                const meta = await cloudUpload(await prepareFile(f));
+                const t = tasks.find(x => x.id === taskId);
+                if (!t) { cloudDelete(meta.id); throw new Error('找不到這筆事項'); }
+                (t.attachments = t.attachments || []).push(meta);
+                saveToStorage();
+            } catch (err) {
+                alert('附件上傳失敗：' + uploadErrorMessage(err));
+            } finally {
+                pendingUploads[taskId]--;
+                refreshAttArea(taskId);
+            }
+        }
+    }
+
+    // 對「新增表單」加附件
+    async function addFilesToForm(files) {
+        for (const f of files) {
+            formUploading++;
+            renderFormAtt();
+            try {
+                pendingForm.push(await cloudUpload(await prepareFile(f)));
+            } catch (err) {
+                alert('附件上傳失敗：' + uploadErrorMessage(err));
+            } finally {
+                formUploading--;
+                renderFormAtt();
+            }
+        }
+    }
+
+    function handleRowFiles(input, taskId) {
+        const files = Array.from(input.files || []);
+        input.value = '';
+        if (files.length) addFilesToTask(taskId, files);
+    }
+    function handleFormFiles(input) {
+        const files = Array.from(input.files || []);
+        input.value = '';
+        if (files.length) addFilesToForm(files);
+    }
+    function handleRowPaste(e, taskId) {
+        const files = Array.from((e.clipboardData && e.clipboardData.files) || []);
+        if (!files.length) return;          // 純文字貼上照常運作
+        e.preventDefault();
+        addFilesToTask(taskId, files);
+    }
+    function handleFormPaste(e) {
+        const files = Array.from((e.clipboardData && e.clipboardData.files) || []);
+        if (!files.length) return;
+        e.preventDefault();
+        addFilesToForm(files);
+    }
+    function attDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('att-drop-hover'); }
+    function attDragLeave(e) { e.currentTarget.classList.remove('att-drop-hover'); }
+    function attDrop(e, taskId) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('att-drop-hover');
+        const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+        if (files.length) addFilesToTask(taskId, files);
+    }
+    function attDropForm(e) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('att-drop-hover');
+        const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+        if (files.length) addFilesToForm(files);
+    }
+
+    function removeAttachment(taskId, fileId) {
+        if (!confirm('確定移除這個附件？檔案也會從雲端硬碟移到垃圾桶。')) return;
+        const t = tasks.find(x => x.id === taskId);
+        if (!t) return;
+        t.attachments = (t.attachments || []).filter(a => a.id !== fileId);
+        saveToStorage();
+        cloudDelete(fileId);
+        refreshAttArea(taskId);
+    }
+    function removeFormAttachment(fileId) {
+        pendingForm = pendingForm.filter(a => a.id !== fileId);
+        cloudDelete(fileId);
+        renderFormAtt();
+    }
+
+    function downloadEntry(entry) {
+        const a = document.createElement('a');
+        a.href = entry.url;
+        a.download = entry.name || '附件';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    }
+    function openAttachment(id) {
+        document.body.style.cursor = 'progress';
+        fetchFile(id).then(entry => {
+            if ((entry.mime || '').startsWith('image/')) {
+                document.getElementById('lightboxImg').src = entry.url;
+                document.getElementById('lightboxDownload').onclick = () => downloadEntry(entry);
+                document.getElementById('lightbox').style.display = 'flex';
+            } else {
+                downloadEntry(entry);
+            }
+        }).catch(err => alert('開啟附件失敗：' + uploadErrorMessage(err)))
+          .finally(() => { document.body.style.cursor = ''; });
+    }
+    function closeLightbox() { document.getElementById('lightbox').style.display = 'none'; }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+    // 刪除事項時，一併把它的附件移到雲端硬碟垃圾桶
+    function trashAttachmentsOf(item) {
+        (item && item.attachments || []).forEach(a => cloudDelete(a.id));
+    }
 
     let currentFilter = 'active';
     let currentCategoryFilter = 'all'; 
@@ -742,7 +1170,10 @@
                     <td><div class="readonly-text">${item.reqDate || '-'}</div></td>
                     <td><div class="readonly-text">${item.promiseDate || '-'}</div></td>
                     <td><span class="status-select status-archive" style="display:inline-block; text-align:center; padding:6px 0; width:125px;">📦 已結案歸檔</span></td>
-                    <td><div class="readonly-text">${item.note}<br><small style="color:gray;">歸檔時間: ${item.finalArchivedTime}</small></div></td>
+                    <td>
+                        <div class="readonly-text">${item.note}<br><small style="color:gray;">歸檔時間: ${item.finalArchivedTime}</small></div>
+                        <div class="att-area">${attHtml(item.attachments, 0, null)}</div>
+                    </td>
                     <td><button class="btn-delete" onclick="deleteArchivedTask(${item.id})">刪除</button></td>
                 `;
             } else {
@@ -791,7 +1222,11 @@
                     <td><textarea class="inline-edit-area" onchange="updateField(${item.id}, 'owner', this.value)" oninput="autoResizeTextarea(this)">${item.owner}</textarea></td>
                     ${dateCellsHtml}
                     ${statusCellHtml}
-                    <td><textarea class="inline-edit-area" onchange="updateField(${item.id}, 'note', this.value)" oninput="autoResizeTextarea(this)" placeholder="點擊更新進度...">${item.note}</textarea></td>
+                    <td class="note-cell" ondragover="attDragOver(event)" ondragleave="attDragLeave(event)" ondrop="attDrop(event, ${item.id})">
+                        <textarea class="inline-edit-area" onchange="updateField(${item.id}, 'note', this.value)" oninput="autoResizeTextarea(this)" onpaste="handleRowPaste(event, ${item.id})" placeholder="點擊更新進度...（可 Ctrl+V 貼圖）">${item.note}</textarea>
+                        <div class="att-area" id="att-${item.id}">${attHtml(item.attachments, pendingUploads[item.id] || 0, a => `removeAttachment(${item.id}, '${a.id}')`)}</div>
+                        <label class="att-add-btn">📎 加附件<input type="file" multiple style="display:none" onchange="handleRowFiles(this, ${item.id})"></label>
+                    </td>
                     <td><button class="btn-delete" onclick="deleteTask(${item.id})">刪除</button></td>
                 `;
             }
@@ -799,6 +1234,7 @@
         });
 
         document.querySelectorAll('td textarea.inline-edit-area').forEach(textarea => autoResizeTextarea(textarea));
+        hydrateAttachments();
     }
 
     // ====== 待辦時間軸 (橫向 Gantt，依「要求日」倒數) ======
@@ -955,14 +1391,18 @@
         const note = document.getElementById('note').value;
 
         if (!task) { alert('請填寫完整內容！'); return; }
+        if (formUploading > 0) { alert('附件還在上傳中，請等上傳完成再新增。'); return; }
 
         const newTask = {
             id: Date.now(), importance: importance, category: category, type: type, project: project,
             task: task, owner: owner, reqDate: reqDate, promiseDate: promiseDate,
-            status: 'todo', note: note, archiveDate: null, today: false
+            status: 'todo', note: note, archiveDate: null, today: false,
+            attachments: pendingForm.slice()
         };
 
         tasks.push(newTask);
+        pendingForm = [];
+        renderFormAtt();
         if (type === 'reminder') { switchFilter('reminder'); } else { render(); }
 
         document.getElementById('task').value = '';
@@ -1012,8 +1452,26 @@
         }
     }
 
-    function deleteTask(id) { if(confirm('確定要刪除嗎？')) { tasks = tasks.filter(item => item.id !== id); render(); saveToStorage(); } }
-    function deleteArchivedTask(id) { if(confirm('確定要永久刪除嗎？')) { archivedTasks = archivedTasks.filter(item => item.id !== id); render(); saveToStorage(); } }
+    function deleteTask(id) {
+        const target = tasks.find(item => item.id === id);
+        const hasAtt = target && target.attachments && target.attachments.length > 0;
+        if (confirm(hasAtt ? '確定要刪除嗎？這筆事項的附件也會一併移到雲端硬碟垃圾桶。' : '確定要刪除嗎？')) {
+            trashAttachmentsOf(target);
+            tasks = tasks.filter(item => item.id !== id);
+            render();
+            saveToStorage();
+        }
+    }
+    function deleteArchivedTask(id) {
+        const target = archivedTasks.find(item => item.id === id);
+        const hasAtt = target && target.attachments && target.attachments.length > 0;
+        if (confirm(hasAtt ? '確定要永久刪除嗎？這筆事項的附件也會一併移到雲端硬碟垃圾桶。' : '確定要永久刪除嗎？')) {
+            trashAttachmentsOf(target);
+            archivedTasks = archivedTasks.filter(item => item.id !== id);
+            render();
+            saveToStorage();
+        }
+    }
 
     window.onload = function() {
         loadFromCloud(function() {
