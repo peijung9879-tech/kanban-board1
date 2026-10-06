@@ -309,6 +309,58 @@
             filter: drop-shadow(0 0 3px rgba(243, 156, 18, 0.7));
         }
 
+        /* ====== 依專案分組檢視 ====== */
+        #projectToolbar {
+            display: none;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin: 6px 0 2px;
+            font-size: 14px;
+            color: #555;
+        }
+        #projectToolbar label {
+            margin: 0;
+            font-weight: normal;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+        #projectToolbar button {
+            padding: 5px 12px;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            background: #fff;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        #projectToolbar button:hover { background: #eef1f3; }
+        tr.project-group-row td {
+            background: #34495e;
+            color: #fff;
+            padding: 10px 14px;
+            font-size: 15px;
+            cursor: pointer;
+            user-select: none;
+            border-color: #34495e;
+        }
+        tr.project-group-row.not-first td { border-top: 12px solid #fff; }
+        tr.project-group-row:hover td { background: #3f5a75; }
+        .pg-arrow { display: inline-block; width: 18px; }
+        .pg-name { font-weight: bold; margin-right: 10px; }
+        .pg-badge {
+            display: inline-block;
+            margin-right: 8px;
+            padding: 2px 9px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.18);
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .pg-badge.pg-done { background: #27ae60; }
+        .pg-badge.pg-overdue { background: #c0392b; }
+
         /* ====== 附件（貼圖 / 檔案）樣式 ====== */
         .att-area {
             display: flex;
@@ -554,6 +606,7 @@
     <div class="filter-section">
         <button id="filterActive" class="btn-filter active" onclick="switchFilter('active')">🔍 進行中 / 全部</button>
         <button id="filterToday" class="btn-filter" onclick="switchFilter('today')">🌟 今日待辦</button>
+        <button id="filterProject" class="btn-filter" onclick="switchFilter('project')">📁 依專案分組</button>
         <button id="filterDone" class="btn-filter" onclick="switchFilter('done')">✅ 只看已完成</button>
         <button id="filterReminder" class="btn-filter" onclick="switchFilter('reminder')">💡 提醒事項區</button>
         <button id="filterArchive" class="btn-filter" onclick="switchFilter('archive')">📦 歷史結案區</button>
@@ -595,7 +648,8 @@
             </div>
             <div class="form-group">
                 <label for="project">相關專案</label>
-                <input type="text" id="project" placeholder="相關專案名稱...">
+                <input type="text" id="project" list="projectList" placeholder="相關專案名稱...">
+                <datalist id="projectList"></datalist>
             </div>
             <div class="form-group flex-2">
                 <label for="task">預計完成事項 / 提醒內容</label>
@@ -629,6 +683,14 @@
                 <button class="btn-add" onclick="addTask()">➕ 新增事項</button>
             </div>
         </div>
+    </div>
+
+    <!-- 依專案分組檢視的工具列 -->
+    <div id="projectToolbar">
+        <label><input type="checkbox" id="showDoneChk" onchange="render()"> 顯示已完成</label>
+        <button onclick="setAllProjectCollapsed(true)">▶ 全部收合</button>
+        <button onclick="setAllProjectCollapsed(false)">▼ 全部展開</button>
+        <span style="color:#999; font-size:12px;">💡 點專案標題列可收合 / 展開；專案名稱相同（不分大小寫）會歸在一起</span>
     </div>
 
     <table id="kanbanTable">
@@ -1058,6 +1120,8 @@
         currentFilter = mode;
         document.getElementById('filterActive').classList.toggle('active', mode === 'active');
         document.getElementById('filterToday').classList.toggle('active', mode === 'today');
+        document.getElementById('filterProject').classList.toggle('active', mode === 'project');
+        document.getElementById('projectToolbar').style.display = (mode === 'project') ? 'flex' : 'none';
         document.getElementById('filterDone').classList.toggle('active', mode === 'done');
         document.getElementById('filterReminder').classList.toggle('active', mode === 'reminder');
         document.getElementById('filterArchive').classList.toggle('active', mode === 'archive');
@@ -1101,9 +1165,87 @@
         }
     }
 
+    // ====== 依專案分組：以「相關專案」名稱分組（去頭尾空白、不分大小寫）======
+    const NO_PROJECT = '（未指定專案）';
+    let projectCollapsed = {};   // 分組 key -> 是否收合
+    let projectGroupKeys = [];   // 標題列序號 -> 分組 key（給 onclick 用）
+
+    function projectKeyOf(item) { return (item.project || '').trim().toLowerCase(); }
+    function projectNameOf(item) { return (item.project || '').trim() || NO_PROJECT; }
+    function compareByProject(a, b) {
+        const ka = projectKeyOf(a), kb = projectKeyOf(b);
+        if (ka === kb) return 0;
+        if (!ka) return 1;          // 未指定專案排最後
+        if (!kb) return -1;
+        return ka.localeCompare(kb, 'zh-Hant');
+    }
+    function toggleProjectGroup(idx) {
+        const key = projectGroupKeys[idx];
+        if (key === undefined) return;
+        projectCollapsed[key] = !projectCollapsed[key];
+        render();
+    }
+    function setAllProjectCollapsed(flag) {
+        tasks.forEach(t => { if (t.type !== 'reminder') projectCollapsed[projectKeyOf(t)] = flag; });
+        render();
+    }
+    // 讓「相關專案」輸入欄可以直接挑已用過的名稱，避免打錯字被分成兩組
+    function refreshProjectList() {
+        const dl = document.getElementById('projectList');
+        if (!dl) return;
+        const names = new Set();
+        tasks.concat(archivedTasks).forEach(t => { const n = (t.project || '').trim(); if (n) names.add(n); });
+        dl.innerHTML = Array.from(names).sort((a, b) => a.localeCompare(b, 'zh-Hant'))
+            .map(n => `<option value="${esc(n)}"></option>`).join('');
+    }
+
+    // 目前頁籤 / 類別篩選下，這筆事項要不要顯示
+    function isItemVisible(item) {
+        if (currentFilter === 'active' && (item.status === 'archive' || item.status === 'done' || item.type === 'reminder')) return false;
+        if (currentFilter === 'today' && (!item.today || item.status === 'archive' || item.status === 'done' || item.type === 'reminder')) return false;
+        if (currentFilter === 'done' && (item.status !== 'done' || item.type === 'reminder')) return false;
+        if (currentFilter === 'reminder' && item.type !== 'reminder') return false;
+        if (currentFilter === 'project') {
+            if (item.type === 'reminder') return false;
+            const chk = document.getElementById('showDoneChk');
+            if (item.status === 'done' && !(chk && chk.checked)) return false;
+        }
+        if (currentCategoryFilter === 'law' && item.category !== 'law') return false;
+        if (currentCategoryFilter === 'other' && item.category === 'law') return false;
+        return true;
+    }
+
+    // 每個專案的統計（未完成 / 已完成 / 逾期），不受「顯示已完成」勾選影響
+    function buildProjectStats() {
+        const stats = {};
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        tasks.forEach(t => {
+            if (t.type === 'reminder') return;
+            if (currentCategoryFilter === 'law' && t.category !== 'law') return;
+            if (currentCategoryFilter === 'other' && t.category === 'law') return;
+            const key = projectKeyOf(t);
+            const g = stats[key] || (stats[key] = { name: projectNameOf(t), total: 0, done: 0, overdue: 0, variants: {} });
+            const nm = projectNameOf(t);
+            g.variants[nm] = (g.variants[nm] || 0) + 1;
+            g.total++;
+            if (t.status === 'done') { g.done++; return; }
+            if (t.reqDate && t.status !== 'archive') {
+                const d = new Date(t.reqDate); d.setHours(0, 0, 0, 0);
+                if (d < today) g.overdue++;
+            }
+        });
+        // 標題名稱：用最常出現的寫法（次數相同就取字母順序在前的），不會因排序變來變去
+        Object.keys(stats).forEach(k => {
+            const g = stats[k];
+            g.name = Object.keys(g.variants).sort((a, b) => (g.variants[b] - g.variants[a]) || (a < b ? -1 : a > b ? 1 : 0))[0];
+        });
+        return stats;
+    }
+
     function renderTable() {
         const tbody = document.getElementById('taskRows');
         tbody.innerHTML = '';
+        refreshProjectList();
 
         let dataSource = (currentFilter === 'archive') ? archivedTasks : tasks;
         
@@ -1128,14 +1270,35 @@
         const statusHeader = document.querySelector('.col-status-header');
         if (statusHeader) statusHeader.style.display = (currentFilter === 'reminder') ? 'none' : 'table-cell';
 
-        dataSource.forEach((item) => {
-            if (currentFilter === 'active' && (item.status === 'archive' || item.status === 'done' || item.type === 'reminder')) return;
-            if (currentFilter === 'today' && (!item.today || item.status === 'archive' || item.status === 'done' || item.type === 'reminder')) return;
-            if (currentFilter === 'done' && (item.status !== 'done' || item.type === 'reminder')) return;
-            if (currentFilter === 'reminder' && item.type !== 'reminder') return;
-            
-            if (currentCategoryFilter === 'law' && item.category !== 'law') return;
-            if (currentCategoryFilter === 'other' && item.category === 'law') return;
+        const visibleItems = dataSource.filter(isItemVisible);
+        const projectMode = (currentFilter === 'project');
+        const projectStats = projectMode ? buildProjectStats() : {};
+        if (projectMode) visibleItems.sort(compareByProject);   // 穩定排序：同專案內維持原本的今日 / 重要性 / 要求日順序
+        projectGroupKeys = [];
+        let lastGroupKey = null;
+
+        visibleItems.forEach((item) => {
+            if (projectMode) {
+                const gKey = projectKeyOf(item);
+                if (gKey !== lastGroupKey) {
+                    lastGroupKey = gKey;
+                    const idx = projectGroupKeys.push(gKey) - 1;
+                    const g = projectStats[gKey] || { name: projectNameOf(item), total: 0, done: 0, overdue: 0 };
+                    const collapsed = !!projectCollapsed[gKey];
+                    const headerTr = document.createElement('tr');
+                    headerTr.classList.add('project-group-row');
+                    if (idx > 0) headerTr.classList.add('not-first');
+                    headerTr.innerHTML = `<td colspan="12" onclick="toggleProjectGroup(${idx})">` +
+                        `<span class="pg-arrow">${collapsed ? '▶' : '▼'}</span>` +
+                        `<span class="pg-name">📁 ${esc(g.name)}</span>` +
+                        `<span class="pg-badge">未完成 ${g.total - g.done} 件</span>` +
+                        `<span class="pg-badge pg-done">已完成 ${g.done} 件</span>` +
+                        (g.overdue > 0 ? `<span class="pg-badge pg-overdue">💥 逾期 ${g.overdue} 件</span>` : '') +
+                        `</td>`;
+                    tbody.appendChild(headerTr);
+                }
+                if (projectCollapsed[gKey]) return;   // 此專案已收合：只留標題列
+            }
 
             const tr = document.createElement('tr');
             
