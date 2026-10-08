@@ -14,7 +14,7 @@
             font-family: "Helvetica Neue", Helvetica, Arial, "PingFang TC", "Microsoft JhengHei", sans-serif;
             background-color: var(--bg-color);
             margin: 0;
-            padding: 20px;
+            padding: 20px 20px 80px;   /* 底部留空，避免被固定在下方的符號列擋住 */
             color: #333;
             zoom: 0.75;
         }
@@ -33,6 +33,55 @@
             border-bottom: 2px solid var(--primary-color);
             padding-bottom: 10px;
             margin-bottom: 15px;
+        }
+
+        /* 常用符號列（點一下複製）：固定在視窗最下方 */
+        .symbol-bar {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 900;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            padding: 8px 16px;
+            background: #fff;
+            border-top: 2px solid var(--primary-color);
+            box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.12);
+        }
+        .symbol-bar .sym-label {
+            font-size: 12px;
+            color: #888;
+            margin-right: 6px;
+            white-space: nowrap;
+        }
+        .symbol-bar button.sym {
+            min-width: 30px;
+            height: 28px;
+            padding: 0 6px;
+            border: 1px solid #d0d5da;
+            border-radius: 4px;
+            background: #fff;
+            font-size: 15px;
+            line-height: 1;
+            cursor: pointer;
+        }
+        .symbol-bar button.sym:hover { background: #eef6fc; border-color: #3498db; }
+        .symbol-bar button.sym:active { background: #dbeefa; }
+        .symbol-bar .sym-sep {
+            width: 1px;
+            height: 18px;
+            background: #d0d5da;
+            margin: 0 4px;
+        }
+        #symbolMsg {
+            font-size: 12px;
+            font-weight: bold;
+            color: #27ae60;
+            min-width: 80px;
         }
         h1 {
             color: var(--primary-color);
@@ -755,6 +804,39 @@
     <div id="timelineContainer" style="display:none;"></div>
 </div>
 
+    <!-- 常用符號列：固定在視窗最下方，點一下複製 -->
+    <div class="symbol-bar">
+        <span class="sym-label">常用符號（點一下複製）：</span>
+        <button class="sym" onclick="copySymbol(this.textContent)">【】</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">「」</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">‼️</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">❗</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">⚠️</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">🔥</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">📌</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">⭐</button>
+        <span class="sym-sep"></span>
+        <button class="sym" onclick="copySymbol(this.textContent)">✅</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">❌</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">🔴</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">🟡</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">🟢</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">⏰</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">⏳</button>
+        <span class="sym-sep"></span>
+        <button class="sym" onclick="copySymbol(this.textContent)">➜</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">▶</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">❓</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">📞</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">💬</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">📎</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">★</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">☆</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">●</button>
+        <button class="sym" onclick="copySymbol(this.textContent)">■</button>
+        <span id="symbolMsg"></span>
+    </div>
+
 <!-- 附件放大預覽 -->
 <div id="lightbox" onclick="closeLightbox()">
     <img id="lightboxImg" alt="" onclick="event.stopPropagation()">
@@ -1065,6 +1147,38 @@
     // 刪除事項時，一併把它的附件移到雲端硬碟垃圾桶
     function trashAttachmentsOf(item) {
         (item && item.attachments || []).forEach(a => cloudDelete(a.id));
+    }
+
+    // ====== 常用符號：點一下複製到剪貼簿 ======
+    let symbolMsgTimer = null;
+    function showSymbolMsg(text) {
+        const el = document.getElementById('symbolMsg');
+        if (!el) return;
+        el.textContent = text;
+        clearTimeout(symbolMsgTimer);
+        symbolMsgTimer = setTimeout(() => { el.textContent = ''; }, 1600);
+    }
+    function copySymbol(sym) {
+        sym = String(sym || '').trim();
+        if (!sym) return;
+        // 舊瀏覽器或不允許使用剪貼簿 API 時的備案
+        const fallback = () => {
+            const ta = document.createElement('textarea');
+            ta.value = sym;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            let ok = false;
+            try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+            ta.remove();
+            showSymbolMsg(ok ? '已複製 ' + sym : '複製失敗，請手動選取');
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(sym).then(() => showSymbolMsg('已複製 ' + sym), fallback);
+        } else {
+            fallback();
+        }
     }
 
     let currentFilter = 'active';
