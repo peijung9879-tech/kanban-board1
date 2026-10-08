@@ -379,6 +379,24 @@
             cursor: pointer;
         }
         .pg-move button:hover { background: rgba(255, 255, 255, 0.35); }
+        .task-move {
+            display: flex;
+            gap: 3px;
+            margin-bottom: 6px;
+        }
+        .task-move button {
+            width: 22px;
+            height: 22px;
+            padding: 0;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            background: #fff;
+            color: #555;
+            font-size: 11px;
+            line-height: 1;
+            cursor: pointer;
+        }
+        .task-move button:hover { background: #eef1f3; border-color: #3498db; color: #2980b9; }
 
         /* ====== 附件（貼圖 / 檔案）樣式 ====== */
         .att-area {
@@ -709,7 +727,7 @@
         <label><input type="checkbox" id="showDoneChk" onchange="render()"> 顯示已完成</label>
         <button onclick="setAllProjectCollapsed(true)">▶ 全部收合</button>
         <button onclick="setAllProjectCollapsed(false)">▼ 全部展開</button>
-        <span style="color:#999; font-size:12px;">💡 點專案標題列可收合 / 展開；用右側 ▲ ▼ 可調整專案順序；專案名稱相同（不分大小寫）會歸在一起</span>
+        <span style="color:#999; font-size:12px;">💡 點專案標題列可收合 / 展開；用標題列右側 ▲ ▼ 調整專案順序、事項列「操作」欄的 ▲ ▼ 調整專案內的事項順序；專案名稱相同（不分大小寫）會歸在一起</span>
     </div>
 
     <table id="kanbanTable">
@@ -1212,7 +1230,15 @@
 
     function compareByProject(a, b) {
         const ka = projectKeyOf(a), kb = projectKeyOf(b);
-        if (ka === kb) return 0;
+        if (ka === kb) {
+            // 同一專案內：手動排過的依 taskOrder，沒排過的放最後（維持原本的自動排序）
+            const oa = (typeof a.taskOrder === 'number') ? a.taskOrder : null;
+            const ob = (typeof b.taskOrder === 'number') ? b.taskOrder : null;
+            if (oa !== null && ob !== null) return oa - ob;
+            if (oa !== null) return -1;
+            if (ob !== null) return 1;
+            return 0;
+        }
         if (!ka) return 1;          // 未指定專案排最後
         if (!kb) return -1;
         const ra = projectRank[ka], rb = projectRank[kb];
@@ -1233,6 +1259,27 @@
             const p = list.indexOf(projectKeyOf(t));
             if (p >= 0) t.projectOrder = p;
         });
+        saveToStorage();
+        render();
+    }
+
+    // 把某筆事項在「同一個專案內」上移 (-1) / 下移 (+1) 一格；順序記在 taskOrder，會一起同步到雲端
+    function moveTask(id, dir) {
+        const t = tasks.find(x => x.id === id);
+        if (!t) return;
+        const key = projectKeyOf(t);
+        // 這個專案的全部事項（含目前被隱藏的），照畫面上的順序排好
+        const full = tasks.filter(x => x.type !== 'reminder' && projectKeyOf(x) === key);
+        full.sort(compareByProject);
+        // 只和「畫面上看得到」的相鄰事項交換
+        const visible = full.filter(isItemVisible);
+        const vi = visible.indexOf(t);
+        const neighbor = visible[vi + dir];
+        if (vi < 0 || !neighbor) return;
+        const i = full.indexOf(t), j = full.indexOf(neighbor);
+        full[i] = neighbor;
+        full[j] = t;
+        full.forEach((x, n) => { x.taskOrder = n; });
         saveToStorage();
         render();
     }
@@ -1332,13 +1379,19 @@
         const projectMode = (currentFilter === 'project');
         const projectStats = projectMode ? buildProjectStats() : {};
         let visibleGroupKeys = [];
+        const taskEdge = {};   // 事項編號 -> 在所屬專案目前顯示的事項中，是不是第一 / 最後一筆
         if (projectMode) {
             projectRank = {};
             getOrderedProjectKeys().forEach((k, i) => { projectRank[k] = i; });
-            visibleItems.sort(compareByProject);   // 穩定排序：同專案內維持原本的今日 / 重要性 / 要求日順序
-            visibleItems.forEach(it => {
+            visibleItems.sort(compareByProject);   // 穩定排序：同專案內先看手動順序 (taskOrder)，沒排過的維持今日 / 重要性 / 要求日順序
+            visibleItems.forEach((it, n) => {
                 const k = projectKeyOf(it);
                 if (visibleGroupKeys[visibleGroupKeys.length - 1] !== k) visibleGroupKeys.push(k);
+                const prev = visibleItems[n - 1], next = visibleItems[n + 1];
+                taskEdge[it.id] = {
+                    first: !prev || projectKeyOf(prev) !== k,
+                    last: !next || projectKeyOf(next) !== k
+                };
             });
         }
         projectGroupKeys = [];
@@ -1417,6 +1470,15 @@
                     <td><button class="btn-delete" onclick="deleteArchivedTask(${item.id})">刪除</button></td>
                 `;
             } else {
+                // 依專案分組頁：事項列的 ▲ ▼（第一筆沒有 ▲，最後一筆沒有 ▼）
+                let moveBtnsHtml = '';
+                if (projectMode && taskEdge[item.id] && (!taskEdge[item.id].first || !taskEdge[item.id].last)) {
+                    moveBtnsHtml = `<div class="task-move">` +
+                        (!taskEdge[item.id].first ? `<button title="上移一格" onclick="moveTask(${item.id}, -1)">▲</button>` : '') +
+                        (!taskEdge[item.id].last ? `<button title="下移一格" onclick="moveTask(${item.id}, 1)">▼</button>` : '') +
+                        `</div>`;
+                }
+
                 const dateCellsHtml = (currentFilter === 'reminder') ? '' : `
                     <td><input type="date" class="inline-edit-input" value="${item.reqDate || ''}" onchange="updateField(${item.id}, 'reqDate', this.value)"></td>
                     <td><input type="date" class="inline-edit-input" value="${item.promiseDate || ''}" onchange="updateField(${item.id}, 'promiseDate', this.value)"></td>
@@ -1467,7 +1529,7 @@
                         <div class="att-area" id="att-${item.id}">${attHtml(item.attachments, pendingUploads[item.id] || 0, a => `removeAttachment(${item.id}, '${a.id}')`)}</div>
                         <label class="att-add-btn">📎 加附件<input type="file" multiple style="display:none" onchange="handleRowFiles(this, ${item.id})"></label>
                     </td>
-                    <td><button class="btn-delete" onclick="deleteTask(${item.id})">刪除</button></td>
+                    <td>${moveBtnsHtml}<button class="btn-delete" onclick="deleteTask(${item.id})">刪除</button></td>
                 `;
             }
             tbody.appendChild(tr);
@@ -1657,7 +1719,13 @@
     function updateField(id, field, value) {
         const index = tasks.findIndex(item => item.id === id);
         if (index !== -1) {
+            const oldProjectKey = projectKeyOf(tasks[index]);
             tasks[index][field] = value;
+            // 換到別的專案：舊專案的順序號碼不適用，清掉後會排在新專案的最後面
+            if (field === 'project' && projectKeyOf(tasks[index]) !== oldProjectKey) {
+                delete tasks[index].taskOrder;
+                delete tasks[index].projectOrder;
+            }
             if (field === 'type' && value === 'reminder') {
                 tasks[index].reqDate = '';
                 tasks[index].promiseDate = '';
