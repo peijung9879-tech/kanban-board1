@@ -16,6 +16,7 @@
             margin: 0;
             padding: 20px;
             color: #333;
+            zoom: 0.75;
         }
         .container {
             max-width: 100%;
@@ -360,6 +361,24 @@
         }
         .pg-badge.pg-done { background: #27ae60; }
         .pg-badge.pg-overdue { background: #c0392b; }
+        .pg-move {
+            float: right;
+            display: inline-flex;
+            gap: 6px;
+        }
+        .pg-move button {
+            width: 30px;
+            height: 24px;
+            padding: 0;
+            border: 1px solid rgba(255, 255, 255, 0.45);
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+            font-size: 12px;
+            line-height: 1;
+            cursor: pointer;
+        }
+        .pg-move button:hover { background: rgba(255, 255, 255, 0.35); }
 
         /* ====== 附件（貼圖 / 檔案）樣式 ====== */
         .att-area {
@@ -690,7 +709,7 @@
         <label><input type="checkbox" id="showDoneChk" onchange="render()"> 顯示已完成</label>
         <button onclick="setAllProjectCollapsed(true)">▶ 全部收合</button>
         <button onclick="setAllProjectCollapsed(false)">▼ 全部展開</button>
-        <span style="color:#999; font-size:12px;">💡 點專案標題列可收合 / 展開；專案名稱相同（不分大小寫）會歸在一起</span>
+        <span style="color:#999; font-size:12px;">💡 點專案標題列可收合 / 展開；用右側 ▲ ▼ 可調整專案順序；專案名稱相同（不分大小寫）會歸在一起</span>
     </div>
 
     <table id="kanbanTable">
@@ -1169,16 +1188,55 @@
     const NO_PROJECT = '（未指定專案）';
     let projectCollapsed = {};   // 分組 key -> 是否收合
     let projectGroupKeys = [];   // 標題列序號 -> 分組 key（給 onclick 用）
+    let projectRank = {};        // 分組 key -> 排序名次（由 renderTable 每次重新計算）
 
     function projectKeyOf(item) { return (item.project || '').trim().toLowerCase(); }
     function projectNameOf(item) { return (item.project || '').trim() || NO_PROJECT; }
+
+    // 取得目前所有專案的順序（依事項上記錄的 projectOrder；還沒排過的放最後並依名稱排序）
+    function getOrderedProjectKeys() {
+        const info = {};
+        tasks.forEach(t => {
+            if (t.type === 'reminder') return;
+            const k = projectKeyOf(t);
+            if (!k) return;
+            const g = info[k] || (info[k] = { order: Infinity });
+            if (typeof t.projectOrder === 'number' && t.projectOrder < g.order) g.order = t.projectOrder;
+        });
+        return Object.keys(info).sort((a, b) => {
+            const oa = info[a].order, ob = info[b].order;
+            if (oa !== ob) return oa < ob ? -1 : 1;
+            return a.localeCompare(b, 'zh-Hant');
+        });
+    }
+
     function compareByProject(a, b) {
         const ka = projectKeyOf(a), kb = projectKeyOf(b);
         if (ka === kb) return 0;
         if (!ka) return 1;          // 未指定專案排最後
         if (!kb) return -1;
-        return ka.localeCompare(kb, 'zh-Hant');
+        const ra = projectRank[ka], rb = projectRank[kb];
+        return (ra === undefined ? 1e9 : ra) - (rb === undefined ? 1e9 : rb);
     }
+
+    // 把第 idx 個專案往上 (-1) 或往下 (+1) 移一格，並把順序記在每筆事項的 projectOrder 上（會一起同步到雲端）
+    function moveProject(idx, dir) {
+        const keyA = projectGroupKeys[idx];
+        const keyB = projectGroupKeys[idx + dir];
+        if (!keyA || !keyB) return;
+        const list = getOrderedProjectKeys();
+        const i = list.indexOf(keyA), j = list.indexOf(keyB);
+        if (i < 0 || j < 0) return;
+        const tmp = list[i]; list[i] = list[j]; list[j] = tmp;
+        tasks.forEach(t => {
+            if (t.type === 'reminder') return;
+            const p = list.indexOf(projectKeyOf(t));
+            if (p >= 0) t.projectOrder = p;
+        });
+        saveToStorage();
+        render();
+    }
+
     function toggleProjectGroup(idx) {
         const key = projectGroupKeys[idx];
         if (key === undefined) return;
@@ -1273,7 +1331,16 @@
         const visibleItems = dataSource.filter(isItemVisible);
         const projectMode = (currentFilter === 'project');
         const projectStats = projectMode ? buildProjectStats() : {};
-        if (projectMode) visibleItems.sort(compareByProject);   // 穩定排序：同專案內維持原本的今日 / 重要性 / 要求日順序
+        let visibleGroupKeys = [];
+        if (projectMode) {
+            projectRank = {};
+            getOrderedProjectKeys().forEach((k, i) => { projectRank[k] = i; });
+            visibleItems.sort(compareByProject);   // 穩定排序：同專案內維持原本的今日 / 重要性 / 要求日順序
+            visibleItems.forEach(it => {
+                const k = projectKeyOf(it);
+                if (visibleGroupKeys[visibleGroupKeys.length - 1] !== k) visibleGroupKeys.push(k);
+            });
+        }
         projectGroupKeys = [];
         let lastGroupKey = null;
 
@@ -1285,10 +1352,20 @@
                     const idx = projectGroupKeys.push(gKey) - 1;
                     const g = projectStats[gKey] || { name: projectNameOf(item), total: 0, done: 0, overdue: 0 };
                     const collapsed = !!projectCollapsed[gKey];
+                    // 「未指定專案」固定排最後，不能移動，也不能和它交換
+                    const canUp = gKey !== '' && idx > 0;
+                    const canDown = gKey !== '' && idx < visibleGroupKeys.length - 1 && visibleGroupKeys[idx + 1] !== '';
+                    const moveHtml = (canUp || canDown)
+                        ? `<span class="pg-move">` +
+                          (canUp ? `<button title="上移一格" onclick="event.stopPropagation(); moveProject(${idx}, -1)">▲</button>` : '') +
+                          (canDown ? `<button title="下移一格" onclick="event.stopPropagation(); moveProject(${idx}, 1)">▼</button>` : '') +
+                          `</span>`
+                        : '';
                     const headerTr = document.createElement('tr');
                     headerTr.classList.add('project-group-row');
                     if (idx > 0) headerTr.classList.add('not-first');
                     headerTr.innerHTML = `<td colspan="12" onclick="toggleProjectGroup(${idx})">` +
+                        moveHtml +
                         `<span class="pg-arrow">${collapsed ? '▶' : '▼'}</span>` +
                         `<span class="pg-name">📁 ${esc(g.name)}</span>` +
                         `<span class="pg-badge">未完成 ${g.total - g.done} 件</span>` +
