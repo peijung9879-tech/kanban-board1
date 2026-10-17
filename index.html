@@ -250,6 +250,111 @@
             width: 125px;
             box-sizing: border-box;
         }
+        /* ====== 手機檢視 ====== */
+        body.mobile-mode { zoom: 1; padding: 10px 10px 24px; }
+        body.mobile-mode .container { padding: 12px; }
+        body.mobile-mode .symbol-bar { display: none; }
+        body.mobile-mode h1 { font-size: 22px; }
+        #mobileContainer { margin-top: 6px; }
+        .m-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #888;
+        }
+        .m-toolbar button {
+            padding: 6px 12px;
+            border: 1px solid #bdc3c7;
+            border-radius: 6px;
+            background: #fff;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .m-toolbar span { margin-left: auto; }
+        .m-group {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+            padding: 11px 12px;
+            border-radius: 8px;
+            background: #34495e;
+            color: #fff;
+            cursor: pointer;
+            user-select: none;
+        }
+        .m-arrow { width: 16px; font-size: 12px; }
+        .m-gname { font-weight: bold; font-size: 16px; flex: 1; min-width: 0; word-break: break-all; }
+        .m-gbadge {
+            padding: 2px 9px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            font-size: 12px;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        .m-gbadge.m-gover { background: #c0392b; }
+        .m-card {
+            margin: 8px 0 0 6px;
+            padding: 12px 12px 10px;
+            border: 1px solid #e1e5e8;
+            border-left: 5px solid #bdc3c7;
+            border-radius: 8px;
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+            cursor: pointer;
+        }
+        .m-card-soon { border-left-color: #e67e22; }
+        .m-card-over { border-left-color: #c0392b; background: #fff8f7; }
+        .m-card-today { background: #fff3e0; }
+        .m-task {
+            font-size: 16px;
+            line-height: 1.5;
+            color: #222;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .m-clamp {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .m-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .m-chip {
+            display: inline-block;
+            padding: 3px 9px;
+            border-radius: 12px;
+            background: #eef1f3;
+            color: #555;
+            font-size: 12px;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        .m-st-todo { background: #e2e3e5; color: #383d41; }
+        .m-st-doing { background: #cce5ff; color: #004085; }
+        .m-st-delay { background: #f8d7da; color: #721c24; }
+        .m-ok { background: #d4edda; color: #155724; }
+        .m-soon { background: #ffe5cc; color: #a5500a; }
+        .m-over { background: #f8d7da; color: #a52a2a; }
+        .m-star { background: #fff5d6; color: #b9770e; }
+        .m-law { background: #ebf5fb; color: #2980b9; }
+        .m-detail { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #dde1e4; cursor: default; }
+        .m-note { font-size: 14px; line-height: 1.55; color: #444; white-space: pre-wrap; word-break: break-word; }
+        .m-tap { margin-top: 10px; font-size: 12px; color: #2980b9; text-align: center; cursor: pointer; padding: 4px; }
+        .m-empty { text-align: center; color: #888; padding: 50px 10px; font-size: 15px; }
+        @media (max-width: 700px) {
+            .btn-filter { padding: 8px 12px; font-size: 13px; }
+            .btn-category-toggle { padding: 6px 12px; font-size: 13px; }
+            .filter-section { gap: 6px; }
+        }
+
         tr.archive-section-row td {
             background: #eef1f3;
             color: #34495e;
@@ -720,6 +825,7 @@
         <button id="filterActive" class="btn-filter" onclick="switchFilter('active')">🔍 進行中 / 全部</button>
         <button id="filterToday" class="btn-filter" onclick="switchFilter('today')">🌟 今日待辦</button>
         <button id="filterProject" class="btn-filter active" onclick="switchFilter('project')">📁 依專案分組</button>
+        <button id="filterMobile" class="btn-filter" onclick="switchFilter('mobile')">📱 手機檢視</button>
         <button id="filterDone" class="btn-filter" onclick="switchFilter('done')">✅ 只看已完成</button>
         <button id="filterReminder" class="btn-filter" onclick="switchFilter('reminder')">💡 提醒事項區</button>
         <button id="filterArchive" class="btn-filter" onclick="switchFilter('archive')">📦 歷史結案區</button>
@@ -828,6 +934,9 @@
 
     <!-- 待辦時間軸 (Gantt) 檢視 -->
     <div id="timelineContainer" style="display:none;"></div>
+
+    <!-- 手機檢視：依專案分組的卡片清單 -->
+    <div id="mobileContainer" style="display:none;"></div>
 </div>
 
     <!-- 常用符號列：固定在視窗最下方，點一下複製 -->
@@ -1317,9 +1426,13 @@
         document.getElementById('filterReminder').classList.toggle('active', mode === 'reminder');
         document.getElementById('filterArchive').classList.toggle('active', mode === 'archive');
         document.getElementById('filterTimeline').classList.toggle('active', mode === 'timeline');
-        document.getElementById('inputFormSection').style.display = (mode === 'archive' || mode === 'timeline') ? 'none' : 'block';
-        document.getElementById('kanbanTable').style.display = (mode === 'timeline') ? 'none' : 'table';
+        document.getElementById('filterMobile').classList.toggle('active', mode === 'mobile');
+        document.getElementById('inputFormSection').style.display = (mode === 'archive' || mode === 'timeline' || mode === 'mobile') ? 'none' : 'block';
+        document.getElementById('kanbanTable').style.display = (mode === 'timeline' || mode === 'mobile') ? 'none' : 'table';
         document.getElementById('timelineContainer').style.display = (mode === 'timeline') ? 'block' : 'none';
+        document.getElementById('mobileContainer').style.display = (mode === 'mobile') ? 'block' : 'none';
+        // 手機檢視：取消整頁 75% 縮放，並隱藏下方符號列，讓畫面以原尺寸呈現
+        document.body.classList.toggle('mobile-mode', mode === 'mobile');
         render();
     }
 
@@ -1351,6 +1464,8 @@
     function render() {
         if (currentFilter === 'timeline') {
             renderTimeline();
+        } else if (currentFilter === 'mobile') {
+            renderMobile();
         } else {
             renderTable();
         }
@@ -1464,8 +1579,8 @@
         if (currentFilter === 'today' && (!item.today || item.status === 'archive' || item.status === 'done' || item.type === 'reminder')) return false;
         if (currentFilter === 'done' && (item.status !== 'done' || item.type === 'reminder')) return false;
         if (currentFilter === 'reminder' && item.type !== 'reminder') return false;
-        if (currentFilter === 'project') {
-            // 專案頁只留未開始 / 進行中 / 異常卡關；已完成、結案待歸檔各在自己的頁籤看
+        if (currentFilter === 'project' || currentFilter === 'mobile') {
+            // 專案頁（含手機檢視）只留未開始 / 進行中 / 異常卡關；已完成、結案待歸檔各在自己的頁籤看
             if (item.type === 'reminder') return false;
             if (item.status === 'done' || item.status === 'archive') return false;
         }
@@ -1501,6 +1616,115 @@
         return stats;
     }
 
+    // 預設排序：今日待辦優先 → 重要性高到低 → 要求日近到遠（沒填要求日的放後面）
+    function compareDefault(a, b) {
+        const todayA = a.today ? 1 : 0;
+        const todayB = b.today ? 1 : 0;
+        if (todayB !== todayA) return todayB - todayA;
+        const impA = parseInt(a.importance) || 2;
+        const impB = parseInt(b.importance) || 2;
+        if (impB !== impA) return impB - impA;
+        if (!a.reqDate) return 1;
+        if (!b.reqDate) return -1;
+        return new Date(a.reqDate) - new Date(b.reqDate);
+    }
+
+    // ====== 手機檢視：依專案分組的卡片清單（只顯示未開始 / 進行中 / 異常卡關）======
+    let mobileCollapsed = {};   // 專案 key -> 是否收合
+    let mobileOpen = {};        // 事項編號 -> 是否展開看備註 / 附件
+    let mobileGroupKeys = [];   // 標題序號 -> 專案 key（給 onclick 用）
+
+    function toggleMobileGroup(i) {
+        const k = mobileGroupKeys[i];
+        if (k === undefined) return;
+        mobileCollapsed[k] = !mobileCollapsed[k];
+        renderMobile();
+    }
+    function setAllMobileCollapsed(flag) {
+        tasks.forEach(t => { if (t.type !== 'reminder') mobileCollapsed[projectKeyOf(t)] = flag; });
+        renderMobile();
+    }
+    function toggleMobileCard(id) {
+        mobileOpen[id] = !mobileOpen[id];
+        renderMobile();
+    }
+
+    function renderMobile() {
+        const box = document.getElementById('mobileContainer');
+        if (!box) return;
+        const stats = buildProjectStats();
+        projectRank = {};
+        getOrderedProjectKeys().forEach((k, i) => { projectRank[k] = i; });
+        const items = tasks.filter(isItemVisible).sort(compareDefault).sort(compareByProject);   // 先照預設排序，再依專案分組（同專案內尊重手動順序）
+
+        if (items.length === 0) {
+            box.innerHTML = `<div class="m-empty">🎉 目前沒有未開始 / 進行中 / 異常卡關的事項</div>`;
+            return;
+        }
+
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const statusText = { todo: '❌ 未開始', doing: '⚡ 進行中', delay: '⚠️ 異常卡關' };
+        mobileGroupKeys = [];
+        let html = `<div class="m-toolbar">
+            <button onclick="setAllMobileCollapsed(true)">▶ 全部收合</button>
+            <button onclick="setAllMobileCollapsed(false)">▼ 全部展開</button>
+            <span>共 ${items.length} 件</span>
+        </div>`;
+        let lastKey = null;
+
+        items.forEach(item => {
+            const key = projectKeyOf(item);
+            if (key !== lastKey) {
+                lastKey = key;
+                const idx = mobileGroupKeys.push(key) - 1;
+                const g = stats[key] || { name: projectNameOf(item), total: 0, overdue: 0 };
+                html += `<div class="m-group" onclick="toggleMobileGroup(${idx})">
+                    <span class="m-arrow">${mobileCollapsed[key] ? '▶' : '▼'}</span>
+                    <span class="m-gname">📁 ${esc(g.name)}</span>
+                    <span class="m-gbadge">${g.total} 件</span>
+                    ${g.overdue > 0 ? `<span class="m-gbadge m-gover">💥 逾期 ${g.overdue}</span>` : ''}
+                </div>`;
+            }
+            if (mobileCollapsed[key]) return;
+
+            // 要求日：逾期（紅）/ 3 天內（橘）/ 其他（綠）
+            let dateChip = '';
+            let urgency = '';
+            if (item.reqDate) {
+                const d = new Date(item.reqDate); d.setHours(0, 0, 0, 0);
+                const diff = Math.round((d - today) / 86400000);
+                const cls = diff < 0 ? 'm-over' : (diff <= 3 ? 'm-soon' : 'm-ok');
+                const txt = diff < 0 ? `逾期 ${Math.abs(diff)} 天` : (diff === 0 ? '今天到期' : `剩 ${diff} 天`);
+                dateChip = `<span class="m-chip ${cls}">📅 ${d.getMonth() + 1}/${d.getDate()}・${txt}</span>`;
+                urgency = diff < 0 ? 'm-card-over' : (diff <= 3 ? 'm-card-soon' : '');
+            }
+            const stars = item.importance === '3' ? '★★★' : (item.importance === '1' ? '★' : '★★');
+            const open = !!mobileOpen[item.id];
+            const attCount = (item.attachments || []).length;
+            const owner = (item.owner || '').trim();
+
+            html += `<div class="m-card ${urgency} ${item.today ? 'm-card-today' : ''}" onclick="toggleMobileCard(${item.id})">
+                <div class="m-task ${open ? '' : 'm-clamp'}">${item.today ? '⭐ ' : ''}${esc(item.task)}</div>
+                <div class="m-meta">
+                    <span class="m-chip m-st-${esc(item.status)}">${statusText[item.status] || esc(item.status)}</span>
+                    ${dateChip}
+                    <span class="m-chip m-star">${stars}</span>
+                    ${item.category === 'law' ? '<span class="m-chip m-law">⚖️ 法規</span>' : ''}
+                    ${owner && owner !== '我' ? `<span class="m-chip">👤 ${esc(owner)}</span>` : ''}
+                    ${attCount ? `<span class="m-chip">📎 ${attCount}</span>` : ''}
+                </div>
+                ${open ? `<div class="m-detail" onclick="event.stopPropagation()">
+                    <div class="m-note">${item.note ? esc(item.note) : '（沒有備註）'}</div>
+                    ${attCount ? `<div class="att-area">${attHtml(item.attachments, 0, null)}</div>` : ''}
+                    <div class="m-tap" onclick="toggleMobileCard(${item.id})">▲ 收起</div>
+                </div>` : ''}
+            </div>`;
+        });
+
+        box.innerHTML = html;
+        hydrateAttachments();
+    }
+
     function renderTable() {
         const tbody = document.getElementById('taskRows');
         tbody.innerHTML = '';
@@ -1530,17 +1754,7 @@
                 return da < db ? 1 : -1;
             });
         } else if (currentFilter !== 'archive') {
-            dataSource.sort((a, b) => {
-                const todayA = a.today ? 1 : 0;
-                const todayB = b.today ? 1 : 0;
-                if (todayB !== todayA) return todayB - todayA;
-                const impA = parseInt(a.importance) || 2;
-                const impB = parseInt(b.importance) || 2;
-                if (impB !== impA) return impB - impA; 
-                if (!a.reqDate) return 1;
-                if (!b.reqDate) return -1;
-                return new Date(a.reqDate) - new Date(b.reqDate);
-            });
+            dataSource.sort(compareDefault);
         }
         // （歷史結案區的順序上面已經排好了，這裡不再重排）
 
@@ -1995,6 +2209,8 @@
     }
 
     window.onload = function() {
+        // 手機（窄螢幕）打開時，直接進「手機檢視」
+        if (window.innerWidth <= 700) switchFilter('mobile');
         loadFromCloud(function() {
             checkThreeDaysAutoArchive();
             render();
