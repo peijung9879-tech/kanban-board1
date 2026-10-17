@@ -717,9 +717,9 @@
     
     <!-- 第一行：主功能狀態頁籤 -->
     <div class="filter-section">
-        <button id="filterActive" class="btn-filter active" onclick="switchFilter('active')">🔍 進行中 / 全部</button>
+        <button id="filterActive" class="btn-filter" onclick="switchFilter('active')">🔍 進行中 / 全部</button>
         <button id="filterToday" class="btn-filter" onclick="switchFilter('today')">🌟 今日待辦</button>
-        <button id="filterProject" class="btn-filter" onclick="switchFilter('project')">📁 依專案分組</button>
+        <button id="filterProject" class="btn-filter active" onclick="switchFilter('project')">📁 依專案分組</button>
         <button id="filterDone" class="btn-filter" onclick="switchFilter('done')">✅ 只看已完成</button>
         <button id="filterReminder" class="btn-filter" onclick="switchFilter('reminder')">💡 提醒事項區</button>
         <button id="filterArchive" class="btn-filter" onclick="switchFilter('archive')">📦 歷史結案區</button>
@@ -799,7 +799,7 @@
     </div>
 
     <!-- 依專案分組檢視的工具列 -->
-    <div id="projectToolbar">
+    <div id="projectToolbar" style="display:flex;">
         <button onclick="setAllProjectCollapsed(true)">▶ 全部收合</button>
         <button onclick="setAllProjectCollapsed(false)">▼ 全部展開</button>
         <span style="color:#999; font-size:12px;">💡 這裡只顯示未開始 / 進行中 / 異常卡關的事項（已完成、已歸檔請到各自的頁籤看）；點專案標題列可收合 / 展開；用標題列右側 ▲ ▼ 調整專案順序、事項列「操作」欄的 ▲ ▼ 調整專案內的事項順序；專案名稱相同（不分大小寫）會歸在一起</span>
@@ -1207,7 +1207,7 @@
         }
     }
 
-    let currentFilter = 'active';
+    let currentFilter = 'project';   // 開啟網頁時預設顯示「依專案分組」
     let currentCategoryFilter = 'all'; 
     
     let tasks = JSON.parse(localStorage.getItem('kanban_tasks')) || [];
