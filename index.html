@@ -250,6 +250,32 @@
             width: 125px;
             box-sizing: border-box;
         }
+        /* ====== 內容排版：✅ 已完成 / 🟢 進行中 / 🔴 卡關 ====== */
+        .rich-view {
+            padding: 4px;
+            font-size: 15px;
+            line-height: 1.45;
+            min-height: 26px;
+            border: 1px dashed transparent;
+            border-radius: 4px;
+            cursor: text;
+            word-break: break-word;
+        }
+        .rich-view:not(.rich-ro):hover, .rich-view:not(.rich-ro):focus { border-color: #b8c0c6; background: rgba(255, 255, 255, 0.7); outline: none; }
+        .rich-view:empty::before { content: attr(data-ph); color: #aaa; }
+        .rich-ro { cursor: default; }
+        .ln { white-space: pre-wrap; }
+        .ln-gap { height: 6px; }
+        .ln-done { color: #8c9a92; font-size: 0.93em; }
+        .ln-doing, .ln-block {
+            margin: 3px 0;
+            padding: 3px 7px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .ln-doing { color: #14663a; background: #e3f6e8; border-left: 4px solid #27ae60; }
+        .ln-block { color: #a52a2a; background: #fde8e6; border-left: 4px solid #e74c3c; }
+
         /* ====== 手機檢視 ====== */
         body.mobile-mode { zoom: 1; padding: 10px 10px 24px; }
         body.mobile-mode .container { padding: 12px; }
@@ -320,12 +346,7 @@
             white-space: pre-wrap;
             word-break: break-word;
         }
-        .m-clamp {
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
+        .m-clamp { max-height: 7.2em; overflow: hidden; }
         .m-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
         .m-chip {
             display: inline-block;
@@ -348,6 +369,21 @@
         .m-detail { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #dde1e4; cursor: default; }
         .m-note { font-size: 14px; line-height: 1.55; color: #444; white-space: pre-wrap; word-break: break-word; }
         .m-tap { margin-top: 10px; font-size: 12px; color: #2980b9; text-align: center; cursor: pointer; padding: 4px; }
+        .m-done-btn {
+            display: block;
+            width: 100%;
+            margin-top: 10px;
+            padding: 10px;
+            border: 1.5px solid #27ae60;
+            border-radius: 8px;
+            background: #f3fbf5;
+            color: #1e8449;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .m-done-btn:active { background: #d4edda; }
+        .m-more { -webkit-mask-image: linear-gradient(#000 72%, transparent); mask-image: linear-gradient(#000 72%, transparent); }
         .m-empty { text-align: center; color: #888; padding: 50px 10px; font-size: 15px; }
         @media (max-width: 700px) {
             .btn-filter { padding: 8px 12px; font-size: 13px; }
@@ -1616,6 +1652,40 @@
         return stats;
     }
 
+    // 內容排版：依行首符號分三種樣式（輸入框裡仍是純文字，符號就是你打的 ✅ / 🟢 / 🔴）
+    //   ✅ 已完成 → 淡灰、略小；🟢 進行中 → 綠底粗體；🔴 卡關 → 紅底粗體；其餘照常
+    function fmtLines(text) {
+        const t = String(text == null ? '' : text);
+        if (!t.trim()) return '';
+        return t.split(/\r?\n/).map(line => {
+            const head = line.replace(/^\s+/, '');
+            if (!head) return '<div class="ln-gap"></div>';
+            let cls = 'ln';
+            if (head.startsWith('✅')) cls += ' ln-done';
+            else if (head.startsWith('🟢')) cls += ' ln-doing';
+            else if (head.startsWith('🔴')) cls += ' ln-block';
+            return `<div class="${cls}">${esc(line)}</div>`;
+        }).join('');
+    }
+
+    // 點一下排好版的內容 → 變成輸入框；離開輸入框 → 回到排好版的樣子
+    function startEdit(view) {
+        const ta = view.nextElementSibling;
+        if (!ta) return;
+        view.style.display = 'none';
+        ta.style.display = 'block';
+        autoResizeTextarea(ta);
+        ta.focus();
+        try { const n = ta.value.length; ta.setSelectionRange(n, n); } catch (e) {}
+    }
+    function endEdit(ta) {
+        const view = ta.previousElementSibling;
+        if (!view) return;
+        view.innerHTML = fmtLines(ta.value);
+        ta.style.display = 'none';
+        view.style.display = '';
+    }
+
     // 預設排序：今日待辦優先 → 重要性高到低 → 要求日近到遠（沒填要求日的放後面）
     function compareDefault(a, b) {
         const todayA = a.today ? 1 : 0;
@@ -1647,6 +1717,16 @@
     function toggleMobileCard(id) {
         mobileOpen[id] = !mobileOpen[id];
         renderMobile();
+    }
+
+    // 手機檢視卡片下方的「✅ 完成」：確認後標記為完成（會一併記錄完成日期，之後到「只看已完成」頁就看得到）
+    function markDoneMobile(id) {
+        const t = tasks.find(x => x.id === id);
+        if (!t) return;
+        const text = String(t.task || '').replace(/\s+/g, ' ').trim();
+        const short = text.length > 40 ? text.slice(0, 40) + '…' : text;
+        if (!confirm('標記為完成？\n\n' + short)) return;
+        updateStatus(id, 'done');
     }
 
     function renderMobile() {
@@ -1704,7 +1784,7 @@
             const owner = (item.owner || '').trim();
 
             html += `<div class="m-card ${urgency} ${item.today ? 'm-card-today' : ''}" onclick="toggleMobileCard(${item.id})">
-                <div class="m-task ${open ? '' : 'm-clamp'}">${item.today ? '⭐ ' : ''}${esc(item.task)}</div>
+                <div class="m-task ${open ? '' : 'm-clamp'}">${item.today ? '<div class="ln">⭐ 今日待辦</div>' : ''}${fmtLines(item.task)}</div>
                 <div class="m-meta">
                     <span class="m-chip m-st-${esc(item.status)}">${statusText[item.status] || esc(item.status)}</span>
                     ${dateChip}
@@ -1714,14 +1794,17 @@
                     ${attCount ? `<span class="m-chip">📎 ${attCount}</span>` : ''}
                 </div>
                 ${open ? `<div class="m-detail" onclick="event.stopPropagation()">
-                    <div class="m-note">${item.note ? esc(item.note) : '（沒有備註）'}</div>
+                    <div class="m-note">${item.note ? fmtLines(item.note) : '（沒有備註）'}</div>
                     ${attCount ? `<div class="att-area">${attHtml(item.attachments, 0, null)}</div>` : ''}
                     <div class="m-tap" onclick="toggleMobileCard(${item.id})">▲ 收起</div>
                 </div>` : ''}
+                <button class="m-done-btn" onclick="event.stopPropagation(); markDoneMobile(${item.id})">✅ 完成</button>
             </div>`;
         });
 
         box.innerHTML = html;
+        // 收合狀態下被截斷的長內容，下緣加一點淡出，提示還有更多
+        box.querySelectorAll('.m-clamp').forEach(el => { if (el.scrollHeight > el.clientHeight + 1) el.classList.add('m-more'); });
         hydrateAttachments();
     }
 
@@ -1862,13 +1945,13 @@
                         <span class="type-badge ${item.type === 'assign' ? 'type-assign' : (item.type === 'reminder' ? 'type-reminder' : 'type-general')}">${item.type === 'assign' ? '👉 指派' : (item.type === 'reminder' ? '💡 提醒' : '📝 一般')}</span>
                     </td>
                     <td><div class="readonly-text">${item.project || '-'}</div></td>
-                    <td><div class="readonly-text">${item.task}</div></td>
+                    <td><div class="rich-view rich-ro">${fmtLines(item.task)}</div></td>
                     <td><div class="readonly-text">${item.owner}</div></td>
                     <td><div class="readonly-text">${item.reqDate || '-'}</div></td>
                     <td><div class="readonly-text">${item.promiseDate || '-'}</div></td>
                     <td><span class="status-select status-archive" style="display:inline-block; text-align:center; padding:6px 0; width:125px;">📦 已結案歸檔</span></td>
                     <td>
-                        <div class="readonly-text">${item.note}<br><small style="color:gray;">歸檔時間: ${item.finalArchivedTime}</small></div>
+                        <div class="rich-view rich-ro">${fmtLines(item.note)}</div><div class="readonly-text"><small style="color:gray;">歸檔時間: ${esc(item.finalArchivedTime)}</small></div>
                         <div class="att-area">${attHtml(item.attachments, 0, null)}</div>
                     </td>
                     <td><button class="btn-delete" onclick="deleteArchivedTask(${item.id})">刪除</button></td>
@@ -1931,12 +2014,16 @@
                         </select>
                     </td>
                     <td><textarea class="inline-edit-area" onchange="updateField(${item.id}, 'project', this.value)">${item.project || ''}</textarea></td>
-                    <td><textarea class="inline-edit-area" onchange="updateField(${item.id}, 'task', this.value)" oninput="autoResizeTextarea(this)">${item.task}</textarea></td>
+                    <td>
+                        <div class="rich-view" tabindex="0" data-ph="點一下輸入內容" title="點一下編輯" onclick="startEdit(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();startEdit(this);}">${fmtLines(item.task)}</div>
+                        <textarea class="inline-edit-area" style="display:none;" onchange="updateField(${item.id}, 'task', this.value)" oninput="autoResizeTextarea(this)" onblur="endEdit(this)">${esc(item.task)}</textarea>
+                    </td>
                     <td><textarea class="inline-edit-area" onchange="updateField(${item.id}, 'owner', this.value)" oninput="autoResizeTextarea(this)">${item.owner}</textarea></td>
                     ${dateCellsHtml}
                     ${statusCellHtml}
                     <td class="note-cell" ondragover="attDragOver(event)" ondragleave="attDragLeave(event)" ondrop="attDrop(event, ${item.id})">
-                        <textarea class="inline-edit-area" onchange="updateField(${item.id}, 'note', this.value)" oninput="autoResizeTextarea(this)" onpaste="handleRowPaste(event, ${item.id})" placeholder="點擊更新進度...（可 Ctrl+V 貼圖）">${item.note}</textarea>
+                        <div class="rich-view" tabindex="0" data-ph="點擊更新進度...（可 Ctrl+V 貼圖）" title="點一下編輯" onclick="startEdit(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();startEdit(this);}">${fmtLines(item.note)}</div>
+                        <textarea class="inline-edit-area" style="display:none;" onchange="updateField(${item.id}, 'note', this.value)" oninput="autoResizeTextarea(this)" onblur="endEdit(this)" onpaste="handleRowPaste(event, ${item.id})" placeholder="點擊更新進度...（可 Ctrl+V 貼圖）">${esc(item.note)}</textarea>
                         <div class="att-area" id="att-${item.id}">${attHtml(item.attachments, pendingUploads[item.id] || 0, a => `removeAttachment(${item.id}, '${a.id}')`)}</div>
                         <label class="att-add-btn">📎 加附件<input type="file" multiple style="display:none" onchange="handleRowFiles(this, ${item.id})"></label>
                     </td>
