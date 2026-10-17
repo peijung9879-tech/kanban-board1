@@ -250,6 +250,15 @@
             width: 125px;
             box-sizing: border-box;
         }
+        tr.archive-section-row td {
+            background: #eef1f3;
+            color: #34495e;
+            font-weight: bold;
+            font-size: 14px;
+            padding: 8px 14px;
+            border-top: 8px solid #fff;
+        }
+        tr.archive-section-row small { font-weight: normal; color: #7f8c8d; margin-left: 6px; }
         .done-date-wrap {
             display: flex;
             align-items: center;
@@ -791,10 +800,9 @@
 
     <!-- 依專案分組檢視的工具列 -->
     <div id="projectToolbar">
-        <label><input type="checkbox" id="showDoneChk" onchange="render()"> 顯示已完成</label>
         <button onclick="setAllProjectCollapsed(true)">▶ 全部收合</button>
         <button onclick="setAllProjectCollapsed(false)">▼ 全部展開</button>
-        <span style="color:#999; font-size:12px;">💡 點專案標題列可收合 / 展開；用標題列右側 ▲ ▼ 調整專案順序、事項列「操作」欄的 ▲ ▼ 調整專案內的事項順序；專案名稱相同（不分大小寫）會歸在一起</span>
+        <span style="color:#999; font-size:12px;">💡 這裡只顯示未開始 / 進行中 / 異常卡關的事項（已完成、已歸檔請到各自的頁籤看）；點專案標題列可收合 / 展開；用標題列右側 ▲ ▼ 調整專案順序、事項列「操作」欄的 ▲ ▼ 調整專案內的事項順序；專案名稱相同（不分大小寫）會歸在一起</span>
     </div>
 
     <table id="kanbanTable">
@@ -1272,6 +1280,12 @@
 
     autoResizeTextarea = (el) => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
 
+    // 「結案待歸檔」的事項距離自動歸檔還剩幾天（最少顯示 0）
+    function archiveDaysLeft(item) {
+        const due = new Date(item.archiveDate).getTime() + 3 * 24 * 60 * 60 * 1000;
+        return Math.max(0, Math.ceil((due - Date.now()) / (24 * 60 * 60 * 1000)));
+    }
+
     function checkThreeDaysAutoArchive() {
         const now = Date.now();
         const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
@@ -1293,6 +1307,8 @@
 
     function switchFilter(mode) {
         currentFilter = mode;
+        // 進歷史結案區時順便檢查一次：滿 3 天的立刻歸檔，不必等重新整理網頁
+        if (mode === 'archive') checkThreeDaysAutoArchive();
         document.getElementById('filterActive').classList.toggle('active', mode === 'active');
         document.getElementById('filterToday').classList.toggle('active', mode === 'today');
         document.getElementById('filterProject').classList.toggle('active', mode === 'project');
@@ -1449,30 +1465,30 @@
         if (currentFilter === 'done' && (item.status !== 'done' || item.type === 'reminder')) return false;
         if (currentFilter === 'reminder' && item.type !== 'reminder') return false;
         if (currentFilter === 'project') {
+            // 專案頁只留未開始 / 進行中 / 異常卡關；已完成、結案待歸檔各在自己的頁籤看
             if (item.type === 'reminder') return false;
-            const chk = document.getElementById('showDoneChk');
-            if (item.status === 'done' && !(chk && chk.checked)) return false;
+            if (item.status === 'done' || item.status === 'archive') return false;
         }
         if (currentCategoryFilter === 'law' && item.category !== 'law') return false;
         if (currentCategoryFilter === 'other' && item.category === 'law') return false;
         return true;
     }
 
-    // 每個專案的統計（未完成 / 已完成 / 逾期），不受「顯示已完成」勾選影響
+    // 每個專案的統計（未開始 / 進行中 / 異常卡關的件數與逾期件數；已完成、待歸檔不計入）
     function buildProjectStats() {
         const stats = {};
         const today = new Date(); today.setHours(0, 0, 0, 0);
         tasks.forEach(t => {
             if (t.type === 'reminder') return;
+            if (t.status === 'done' || t.status === 'archive') return;
             if (currentCategoryFilter === 'law' && t.category !== 'law') return;
             if (currentCategoryFilter === 'other' && t.category === 'law') return;
             const key = projectKeyOf(t);
-            const g = stats[key] || (stats[key] = { name: projectNameOf(t), total: 0, done: 0, overdue: 0, variants: {} });
+            const g = stats[key] || (stats[key] = { name: projectNameOf(t), total: 0, overdue: 0, variants: {} });
             const nm = projectNameOf(t);
             g.variants[nm] = (g.variants[nm] || 0) + 1;
             g.total++;
-            if (t.status === 'done') { g.done++; return; }
-            if (t.reqDate && t.status !== 'archive') {
+            if (t.reqDate) {
                 const d = new Date(t.reqDate); d.setHours(0, 0, 0, 0);
                 if (d < today) g.overdue++;
             }
@@ -1490,8 +1506,20 @@
         tbody.innerHTML = '';
         refreshProjectList();
 
-        let dataSource = (currentFilter === 'archive') ? archivedTasks : tasks;
-        
+        // 歷史結案區：最上面先放「結案待歸檔」（還在 tasks 裡、等滿 3 天），下面才是已正式歸檔的
+        let pendingArchive = [];
+        let dataSource;
+        if (currentFilter === 'archive') {
+            pendingArchive = tasks.filter(t => t.status === 'archive')
+                .sort((a, b) => new Date(b.archiveDate || 0) - new Date(a.archiveDate || 0));
+            archivedTasks.sort((a, b) => new Date(b.finalArchivedTime) - new Date(a.finalArchivedTime));
+            dataSource = pendingArchive.concat(archivedTasks);
+        } else {
+            dataSource = tasks;
+        }
+        const pendingSet = new Set(pendingArchive.map(t => t.id));
+        let lastArchiveSection = null;
+
         if (currentFilter === 'done') {
             // 已完成頁：依完成日期由新到舊；沒有記錄日期的舊資料排最後；同一天的維持原本順序
             dataSource.sort((a, b) => {
@@ -1513,9 +1541,8 @@
                 if (!b.reqDate) return -1;
                 return new Date(a.reqDate) - new Date(b.reqDate);
             });
-        } else {
-            dataSource.sort((a, b) => new Date(b.finalArchivedTime) - new Date(a.finalArchivedTime));
         }
+        // （歷史結案區的順序上面已經排好了，這裡不再重排）
 
         const dateHeaders = document.querySelectorAll('.col-date-header');
         dateHeaders.forEach(th => th.style.display = (currentFilter === 'reminder') ? 'none' : 'table-cell');
@@ -1550,7 +1577,7 @@
                 if (gKey !== lastGroupKey) {
                     lastGroupKey = gKey;
                     const idx = projectGroupKeys.push(gKey) - 1;
-                    const g = projectStats[gKey] || { name: projectNameOf(item), total: 0, done: 0, overdue: 0 };
+                    const g = projectStats[gKey] || { name: projectNameOf(item), total: 0, overdue: 0 };
                     const collapsed = !!projectCollapsed[gKey];
                     // 「未指定專案」固定排最後，不能移動，也不能和它交換
                     const canUp = gKey !== '' && idx > 0;
@@ -1568,8 +1595,7 @@
                         moveHtml +
                         `<span class="pg-arrow">${collapsed ? '▶' : '▼'}</span>` +
                         `<span class="pg-name">📁 ${esc(g.name)}</span>` +
-                        `<span class="pg-badge">未完成 ${g.total - g.done} 件</span>` +
-                        `<span class="pg-badge pg-done">已完成 ${g.done} 件</span>` +
+                        `<span class="pg-badge">${g.total} 件</span>` +
                         (g.overdue > 0 ? `<span class="pg-badge pg-overdue">💥 逾期 ${g.overdue} 件</span>` : '') +
                         `</td>`;
                     tbody.appendChild(headerTr);
@@ -1577,13 +1603,30 @@
                 if (projectCollapsed[gKey]) return;   // 此專案已收合：只留標題列
             }
 
+            // 歷史結案區裡：已正式歸檔的是唯讀列；還在等待歸檔的跟一般事項一樣可編輯（可改回其他狀態）
+            const asArchived = (currentFilter === 'archive') && !pendingSet.has(item.id);
+
+            if (currentFilter === 'archive' && pendingArchive.length) {
+                const section = pendingSet.has(item.id) ? 'pending' : 'archived';
+                if (section !== lastArchiveSection) {
+                    lastArchiveSection = section;
+                    const pendingShown = visibleItems.filter(x => pendingSet.has(x.id)).length;
+                    const secTr = document.createElement('tr');
+                    secTr.classList.add('archive-section-row');
+                    secTr.innerHTML = `<td colspan="12">` + (section === 'pending'
+                        ? `📦 待歸檔 ${pendingShown} 件　<small>滿 3 天會自動移到下方的歷史區；想取消歸檔，把狀態改回其他選項即可</small>`
+                        : `🗂️ 已歸檔`) + `</td>`;
+                    tbody.appendChild(secTr);
+                }
+            }
+
             const tr = document.createElement('tr');
-            
-            if (item.today && currentFilter !== 'archive') {
+
+            if (item.today && !asArchived) {
                 tr.classList.add('row-is-today');
-            } else if (item.importance === "3" && currentFilter !== 'archive') {
+            } else if (item.importance === "3" && !asArchived) {
                 tr.classList.add('row-priority-high');
-            } else if (item.category === 'law' && currentFilter !== 'archive') {
+            } else if (item.category === 'law' && !asArchived) {
                 tr.classList.add('row-is-law');
             }
             
@@ -1595,7 +1638,7 @@
 
             let lightIcon = getAutoLight(item.reqDate, item.status, item.type);
 
-            if (currentFilter === 'archive') {
+            if (asArchived) {
                 tr.innerHTML = `
                     <td style="text-align:center;">-</td>
                     <td style="text-align:center;"><span class="light-indicator">⚪</span></td>
@@ -1640,6 +1683,8 @@
                             <option value="delay" ${item.status === 'delay' ? 'selected' : ''}>⚠️ 異常卡關</option>
                             <option value="archive" ${item.status === 'archive' ? 'selected' : ''}>📦 結案待歸檔</option>
                         </select>
+                        ${item.status === 'archive' && item.archiveDate ? `
+                        <div class="done-date-wrap" style="color:#6c757d;">⏳ 還有 ${archiveDaysLeft(item)} 天歸檔</div>` : ''}
                         ${item.status === 'done' ? `
                         <div class="done-date-wrap">
                             <span>完成日</span>
