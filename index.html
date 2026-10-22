@@ -276,10 +276,135 @@
         .ln-doing { color: #14663a; background: #e3f6e8; border-left: 4px solid #27ae60; }
         .ln-block { color: #a52a2a; background: #fde8e6; border-left: 4px solid #e74c3c; }
 
+        /* ====== 簡報檢視 ====== */
+        .sl-toolbar {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 8px 0 10px;
+            font-size: 14px;
+            color: #555;
+        }
+        .sl-toolbar button {
+            padding: 7px 14px;
+            border: 1px solid #bdc3c7;
+            border-radius: 6px;
+            background: #fff;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .sl-toolbar button:hover { background: #eef1f3; }
+        .sl-toolbar label { margin: 0 4px; font-weight: normal; font-size: 14px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+        #slideIndicator { min-width: 90px; text-align: center; font-weight: bold; color: #2c3e50; }
+        .sl-hint { margin-left: auto; color: #999; font-size: 12px; }
+        .sl-viewport {
+            position: relative;
+            width: 100%;
+            overflow: hidden;
+            background: #2c3e50;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+            cursor: pointer;
+            user-select: none;
+        }
+        .sl-viewport:fullscreen { background: #000; border-radius: 0; box-shadow: none; }
+        .sl-stage {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 1280px;
+            height: 720px;
+            transform-origin: top left;
+        }
+        .slide-measure {
+            position: absolute;
+            left: -99999px;
+            top: 0;
+            width: 1152px;
+            visibility: hidden;
+            display: flow-root;
+            font-size: 24px;
+        }
+        #slidesPrint { display: none; }
+
+        .slide {
+            position: relative;
+            width: 1280px;
+            height: 720px;
+            box-sizing: border-box;
+            overflow: hidden;
+            background: #fff;
+            color: #222;
+            font-family: "Helvetica Neue", Helvetica, Arial, "PingFang TC", "Microsoft JhengHei", sans-serif;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .slide::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 10px; background: linear-gradient(90deg, #2c3e50, #18bc9c); }
+        .s-head { position: absolute; left: 64px; right: 64px; top: 28px; height: 78px; border-bottom: 2px solid #e1e5e8; }
+        .s-title { font-size: 38px; font-weight: bold; color: #2c3e50; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .s-sub { margin-top: 6px; font-size: 19px; color: #7f8c8d; }
+        .s-body { position: absolute; left: 64px; top: 122px; width: 1152px; height: 540px; overflow: hidden; font-size: 24px; }
+        .s-foot { position: absolute; left: 64px; right: 64px; bottom: 0; height: 44px; display: flex; justify-content: space-between; align-items: center; font-size: 15px; color: #95a5a6; border-top: 1px solid #eef1f3; }
+        .s-empty { text-align: center; color: #888; padding-top: 120px; font-size: 30px; }
+
+        .s-item { margin-bottom: 14px; padding: 13px 20px 12px; border-radius: 10px; border-left: 8px solid #cfd6db; background: #f7f9fa; display: flow-root; }
+        .s-item-soon { border-left-color: #e67e22; }
+        .s-item-over { border-left-color: #c0392b; background: #fff7f6; }
+        .s-attn { border-left-color: #e74c3c; background: #fff7f6; }
+        .s-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+        .s-chip { display: inline-block; padding: 3px 12px; border-radius: 14px; background: #e9edf0; color: #556; font-size: 17px; font-weight: bold; white-space: nowrap; }
+        .s-st-todo { background: #e2e3e5; color: #383d41; }
+        .s-st-doing { background: #cce5ff; color: #004085; }
+        .s-st-delay { background: #f8d7da; color: #721c24; }
+        .s-ok { background: #d4edda; color: #155724; }
+        .s-soon { background: #ffe5cc; color: #a5500a; }
+        .s-over { background: #f8d7da; color: #a52a2a; }
+        .s-star { background: #fff0cc; color: #9a6400; }
+        .s-law { background: #ebf5fb; color: #2980b9; }
+        .s-proj { background: #34495e; color: #fff; }
+        .s-text { line-height: 1.45; word-break: break-word; }
+        .s-text .ln-done { font-size: 0.9em; }
+        .s-note { margin-top: 9px; padding-top: 8px; border-top: 1px dashed #cfd6db; font-size: 19px; line-height: 1.45; color: #5d6d76; }
+        .s-note b { display: inline-block; margin-right: 8px; color: #34495e; }
+        .s-tight .s-body { font-size: 18px; }
+        .s-tight .s-chip { font-size: 14px; }
+
+        .s-table { width: 100%; border-collapse: collapse; font-size: 26px; }
+        .s-table th { background: #2c3e50; color: #fff; font-weight: bold; font-size: 20px; padding: 10px 16px; text-align: center; border: none; }
+        .s-table th:first-child { text-align: left; border-radius: 8px 0 0 0; }
+        .s-table th:last-child { border-radius: 0 8px 0 0; }
+        .s-table td { padding: 10px 16px; height: 34px; text-align: center; border: none; border-bottom: 1px solid #e9edf0; background: #fff; }
+        .s-table tr:nth-child(even) td { background: #f7f9fa; }
+        .s-table .s-t-name { text-align: left; font-weight: bold; color: #2c3e50; }
+        .s-table .s-t-over { color: #c0392b; font-weight: bold; }
+        .s-table .s-t-block { color: #e74c3c; font-weight: bold; }
+        .s-table .s-t-zero { color: #c3cbd0; }
+
+        .s-cover { background: linear-gradient(135deg, #2c3e50 0%, #34495e 55%, #1f8f7a 130%); color: #fff; text-align: center; }
+        .s-cover::before { display: none; }
+        .s-cover-title { position: absolute; left: 0; right: 0; top: 170px; font-size: 76px; font-weight: bold; letter-spacing: 4px; }
+        .s-cover-date { position: absolute; left: 0; right: 0; top: 280px; font-size: 30px; opacity: 0.85; }
+        .s-tiles { position: absolute; left: 90px; right: 90px; top: 380px; display: flex; gap: 22px; justify-content: center; }
+        .s-tile { flex: 1; padding: 22px 8px 18px; border-radius: 14px; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2); }
+        .s-tile-n { font-size: 64px; font-weight: bold; line-height: 1.1; }
+        .s-tile-l { margin-top: 6px; font-size: 22px; opacity: 0.85; }
+        .s-tile-red { background: rgba(231, 76, 60, 0.35); border-color: rgba(255, 150, 140, 0.6); }
+        .s-foot-cover { border-top-color: rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); }
+
+        @media print {
+            @page { size: 1280px 720px; margin: 0; }
+            body.printing { zoom: 1; padding: 0; background: #fff; }
+            body.printing .container, body.printing .symbol-bar, body.printing #lightbox { display: none !important; }
+            body.printing #slidesPrint { display: block; }
+            .print-slide { width: 1280px; height: 720px; overflow: hidden; break-after: page; page-break-after: always; }
+        }
+
         /* ====== 手機檢視 ====== */
         body.mobile-mode { zoom: 1; padding: 10px 10px 24px; }
         body.mobile-mode .container { padding: 12px; }
-        body.mobile-mode .symbol-bar { display: none; }
+        body.mobile-mode .symbol-bar, body.slides-mode .symbol-bar { display: none; }
+        body.slides-mode { zoom: 1; }
         body.mobile-mode h1 { font-size: 22px; }
         #mobileContainer { margin-top: 6px; }
         .m-toolbar {
@@ -852,6 +977,7 @@
         <button id="filterReminder" class="btn-filter" onclick="switchFilter('reminder')">💡 提醒事項區</button>
         <button id="filterArchive" class="btn-filter" onclick="switchFilter('archive')">📦 歷史結案區</button>
         <button id="filterTimeline" class="btn-filter" onclick="switchFilter('timeline')">📊 待辦時間軸</button>
+        <button id="filterSlides" class="btn-filter" onclick="switchFilter('slides')">🎞️ 簡報檢視</button>
     </div>
 
     <!-- 第二行：獨立類別篩選行 -->
@@ -957,6 +1083,21 @@
     <!-- 待辦時間軸 (Gantt) 檢視 -->
     <div id="timelineContainer" style="display:none;"></div>
 
+    <!-- 簡報檢視：自動把追蹤事項排成 16:9 簡報 -->
+    <div id="slidesContainer" style="display:none;">
+        <div class="sl-toolbar">
+            <button onclick="slideGo(-1)">◀ 上一頁</button>
+            <span id="slideIndicator"></span>
+            <button onclick="slideGo(1)">下一頁 ▶</button>
+            <label><input type="checkbox" id="slideNotesChk" onchange="toggleSlideNotes(this.checked)"> 顯示備註</label>
+            <button onclick="slideFullscreen()">⛶ 全螢幕</button>
+            <button onclick="slidePrint()">🖨 列印 / 存成 PDF</button>
+            <span class="sl-hint">← → 翻頁・F 全螢幕・點畫面左側上一頁 / 其餘下一頁</span>
+        </div>
+        <div id="slideViewport" class="sl-viewport"><div id="slideStage" class="sl-stage"></div></div>
+        <div id="slideMeasure" class="slide-measure"></div>
+    </div>
+
     <!-- 手機檢視：依專案分組的卡片清單 -->
     <div id="mobileContainer" style="display:none;"></div>
 </div>
@@ -993,6 +1134,9 @@
         <button class="sym" onclick="copySymbol(this.textContent)">■</button>
         <span id="symbolMsg"></span>
     </div>
+
+<!-- 簡報列印用（平常隱藏，按「列印 / 存成 PDF」時才會填入每一頁） -->
+<div id="slidesPrint"></div>
 
 <!-- 附件放大預覽 -->
 <div id="lightbox" onclick="closeLightbox()">
@@ -1449,8 +1593,11 @@
         document.getElementById('filterArchive').classList.toggle('active', mode === 'archive');
         document.getElementById('filterTimeline').classList.toggle('active', mode === 'timeline');
         document.getElementById('filterMobile').classList.toggle('active', mode === 'mobile');
-        document.getElementById('inputFormSection').style.display = (mode === 'archive' || mode === 'timeline' || mode === 'mobile') ? 'none' : 'block';
-        document.getElementById('kanbanTable').style.display = (mode === 'timeline' || mode === 'mobile') ? 'none' : 'table';
+        document.getElementById('filterSlides').classList.toggle('active', mode === 'slides');
+        document.getElementById('slidesContainer').style.display = (mode === 'slides') ? 'block' : 'none';
+        document.body.classList.toggle('slides-mode', mode === 'slides');
+        document.getElementById('inputFormSection').style.display = (mode === 'archive' || mode === 'timeline' || mode === 'mobile' || mode === 'slides') ? 'none' : 'block';
+        document.getElementById('kanbanTable').style.display = (mode === 'timeline' || mode === 'mobile' || mode === 'slides') ? 'none' : 'table';
         document.getElementById('timelineContainer').style.display = (mode === 'timeline') ? 'block' : 'none';
         document.getElementById('mobileContainer').style.display = (mode === 'mobile') ? 'block' : 'none';
         // 手機檢視：取消整頁 75% 縮放，並隱藏下方符號列，讓畫面以原尺寸呈現
@@ -1488,6 +1635,8 @@
             renderTimeline();
         } else if (currentFilter === 'mobile') {
             renderMobile();
+        } else if (currentFilter === 'slides') {
+            renderSlides();
         } else {
             renderTable();
         }
@@ -1601,7 +1750,7 @@
         if (currentFilter === 'today' && (!item.today || item.status === 'archive' || item.status === 'done' || item.type === 'reminder')) return false;
         if (currentFilter === 'done' && (item.status !== 'done' || item.type === 'reminder')) return false;
         if (currentFilter === 'reminder' && item.type !== 'reminder') return false;
-        if (currentFilter === 'project' || currentFilter === 'mobile') {
+        if (currentFilter === 'project' || currentFilter === 'mobile' || currentFilter === 'slides') {
             // 專案頁（含手機檢視）只留未開始 / 進行中 / 異常卡關；已完成、結案待歸檔各在自己的頁籤看
             if (item.type === 'reminder') return false;
             if (item.status === 'done' || item.status === 'archive') return false;
@@ -1671,6 +1820,274 @@
         ta.style.display = 'none';
         view.style.display = '';
     }
+
+    // ====== 簡報檢視：把追蹤事項自動排成 16:9 簡報（只含未開始 / 進行中 / 異常卡關）======
+    const SLIDE_W = 1280, SLIDE_H = 720, SLIDE_BODY_H = 520;
+    let slideIdx = 0;
+    let slidesShowNotes = false;
+    let slidesCache = [];
+
+    function lineList(text) {
+        return String(text == null ? '' : text).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    }
+    function hasMarker(text, mark) { return lineList(text).some(l => l.startsWith(mark)); }
+    function isBlockedItem(it) { return it.status === 'delay' || hasMarker(it.task, '🔴'); }
+
+    function slideDue(item, today) {
+        if (!item.reqDate) return null;
+        const d = new Date(item.reqDate); d.setHours(0, 0, 0, 0);
+        const diff = Math.round((d - today) / 86400000);
+        return {
+            diff: diff,
+            cls: diff < 0 ? 's-over' : (diff <= 3 ? 's-soon' : 's-ok'),
+            text: '📅 ' + (d.getMonth() + 1) + '/' + d.getDate() + '・' + (diff < 0 ? '逾期 ' + Math.abs(diff) + ' 天' : (diff === 0 ? '今天到期' : '剩 ' + diff + ' 天'))
+        };
+    }
+
+    // 量一個區塊排版後的高度（用隱藏的量測區；量不到時才用字數估算）
+    function estimateBlockHeight(html) {
+        let lines = 0;
+        html.replace(/<[^>]+>/g, '\n').split('\n').map(x => x.trim()).filter(Boolean).forEach(t => { lines += Math.max(1, Math.ceil(t.length / 40)); });
+        return 70 + lines * 36;
+    }
+    function measureBlock(html) {
+        const m = document.getElementById('slideMeasure');
+        if (m) {
+            m.innerHTML = html;
+            const h = m.offsetHeight;
+            m.innerHTML = '';
+            if (h > 0) return h;
+        }
+        return estimateBlockHeight(html);
+    }
+    // 依高度把區塊塞進一頁一頁；單一區塊就超過一頁時，標記 tight（縮小字體）
+    function paginateBlocks(blocks) {
+        const pages = [];
+        let cur = [], h = 0, tight = false;
+        blocks.forEach(b => {
+            const bh = measureBlock(b);
+            if (cur.length && h + bh > SLIDE_BODY_H) { pages.push({ blocks: cur, tight: tight }); cur = []; h = 0; tight = false; }
+            cur.push(b);
+            h += bh;
+            if (bh > SLIDE_BODY_H) tight = true;
+        });
+        if (cur.length) pages.push({ blocks: cur, tight: tight });
+        return pages;
+    }
+
+    function groupSlideItems(items) {
+        const groups = [];
+        items.forEach(it => {
+            const k = projectKeyOf(it);
+            let g = groups[groups.length - 1];
+            if (!g || g.key !== k) { g = { key: k, items: [], variants: {} }; groups.push(g); }
+            g.items.push(it);
+            const nm = projectNameOf(it);
+            g.variants[nm] = (g.variants[nm] || 0) + 1;
+        });
+        groups.forEach(g => {
+            g.name = Object.keys(g.variants).sort((a, b) => (g.variants[b] - g.variants[a]) || (a < b ? -1 : 1))[0];
+        });
+        return groups;
+    }
+
+    function slideItemBlock(it, today) {
+        const due = slideDue(it, today);
+        const urg = due ? (due.diff < 0 ? 's-item-over' : (due.diff <= 3 ? 's-item-soon' : '')) : '';
+        const statusText = { todo: '❌ 未開始', doing: '⚡ 進行中', delay: '⚠️ 異常卡關' };
+        const owner = (it.owner || '').trim();
+        let chips = '<span class="s-chip s-st-' + esc(it.status) + '">' + (statusText[it.status] || esc(it.status)) + '</span>';
+        if (due) chips += '<span class="s-chip ' + due.cls + '">' + due.text + '</span>';
+        if (it.today) chips += '<span class="s-chip s-star">⭐ 今日待辦</span>';
+        if (it.category === 'law') chips += '<span class="s-chip s-law">⚖️ 法規</span>';
+        if (owner && owner !== '我') chips += '<span class="s-chip">👤 ' + esc(owner) + '</span>';
+        let html = '<div class="s-item ' + urg + '"><div class="s-chips">' + chips + '</div><div class="s-text">' + fmtLines(it.task) + '</div>';
+        if (slidesShowNotes && String(it.note || '').trim()) html += '<div class="s-note"><b>備註</b>' + fmtLines(it.note) + '</div>';
+        return html + '</div>';
+    }
+
+    function slideAttentionBlock(it, projName, today) {
+        const due = slideDue(it, today);
+        const lines = lineList(it.task);
+        const title = lines[0] || '';
+        const rest = lines.slice(1);
+        let key = rest.filter(l => l.startsWith('🔴'));
+        if (!key.length) key = rest.filter(l => l.startsWith('🟢'));
+        let chips = '<span class="s-chip s-proj">📁 ' + esc(projName) + '</span>';
+        if (it.status === 'delay') chips += '<span class="s-chip s-st-delay">⚠️ 異常卡關</span>';
+        else if (hasMarker(it.task, '🔴')) chips += '<span class="s-chip s-st-delay">🔴 有卡關</span>';
+        if (due && due.diff < 0) chips += '<span class="s-chip s-over">💥 逾期 ' + Math.abs(due.diff) + ' 天</span>';
+        else if (due && due.diff <= 3) chips += '<span class="s-chip s-soon">' + due.text + '</span>';
+        return '<div class="s-item s-attn"><div class="s-chips">' + chips + '</div><div class="s-text">' +
+            fmtLines(title) + (key.length ? fmtLines(key.join('\n')) : '') + '</div></div>';
+    }
+
+    function buildSlides() {
+        projectRank = {};
+        getOrderedProjectKeys().forEach((k, i) => { projectRank[k] = i; });
+        const items = tasks.filter(isItemVisible).sort(compareDefault).sort(compareByProject);
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const dateLong = today.getFullYear() + '年' + (today.getMonth() + 1) + '月' + today.getDate() + '日';
+        const slides = [];
+        const scope = currentCategoryFilter === 'law' ? '　法規項目' : (currentCategoryFilter === 'other' ? '　其他項目' : '');
+
+        const groups = groupSlideItems(items);
+        let cntTodo = 0, cntDoing = 0, cntDelay = 0, overdue = 0;
+        items.forEach(it => {
+            if (it.status === 'todo') cntTodo++; else if (it.status === 'doing') cntDoing++; else if (it.status === 'delay') cntDelay++;
+            const due = slideDue(it, today);
+            if (due && due.diff < 0) overdue++;
+        });
+        const tile = (label, n, cls) => '<div class="s-tile ' + (cls && n > 0 ? cls : '') + '"><div class="s-tile-n">' + n + '</div><div class="s-tile-l">' + label + '</div></div>';
+        slides.push({
+            cover: true,
+            html: '<div class="s-cover-title">追蹤事項進度</div><div class="s-cover-date">' + dateLong + esc(scope) + '</div>' +
+                '<div class="s-tiles">' + tile('專案', groups.length, '') + tile('未開始', cntTodo, '') + tile('進行中', cntDoing, '') +
+                tile('異常卡關', cntDelay, 's-tile-red') + tile('逾期', overdue, 's-tile-red') + '</div>'
+        });
+
+        if (!items.length) {
+            slides.push({ title: '目前沒有待辦事項', sub: '', body: '<div class="s-empty">🎉 沒有未開始 / 進行中 / 異常卡關的事項</div>' });
+            return slides;
+        }
+
+        // 專案總覽（每頁 8 個專案）
+        const rows = groups.map(g => {
+            const over = g.items.filter(it => { const d = slideDue(it, today); return d && d.diff < 0; }).length;
+            const blocked = g.items.filter(isBlockedItem).length;
+            return '<tr><td class="s-t-name">📁 ' + esc(g.name) + '</td><td>' + g.items.length + '</td><td class="' + (over ? 's-t-over' : 's-t-zero') + '">' + (over || '–') +
+                '</td><td class="' + (blocked ? 's-t-block' : 's-t-zero') + '">' + (blocked || '–') + '</td></tr>';
+        });
+        const perPage = 8;
+        const ovPages = Math.ceil(rows.length / perPage);
+        for (let pg = 0; pg < ovPages; pg++) {
+            slides.push({
+                title: '專案總覽', sub: '共 ' + groups.length + ' 個專案・' + items.length + ' 件' + (ovPages > 1 ? '　（' + (pg + 1) + '/' + ovPages + '）' : ''),
+                body: '<table class="s-table"><thead><tr><th>專案</th><th>件數</th><th>逾期</th><th>卡關</th></tr></thead><tbody>' +
+                    rows.slice(pg * perPage, (pg + 1) * perPage).join('') + '</tbody></table>'
+            });
+        }
+
+        // 需要關注：卡關（狀態或 🔴）或逾期
+        const projNameOfItem = {};
+        groups.forEach(g => g.items.forEach(it => { projNameOfItem[it.id] = g.name; }));
+        const attn = items.filter(it => { const d = slideDue(it, today); return isBlockedItem(it) || (d && d.diff < 0); });
+        if (attn.length) {
+            const pages = paginateBlocks(attn.map(it => slideAttentionBlock(it, projNameOfItem[it.id], today)));
+            pages.forEach((pg, i) => slides.push({
+                title: '🔴 需要關注', sub: attn.length + ' 件（卡關或逾期）' + (pages.length > 1 ? '　（' + (i + 1) + '/' + pages.length + '）' : ''),
+                body: pg.blocks.join(''), tight: pg.tight
+            }));
+        }
+
+        // 每個專案：一頁（內容多時自動分頁）
+        groups.forEach(g => {
+            const over = g.items.filter(it => { const d = slideDue(it, today); return d && d.diff < 0; }).length;
+            const pages = paginateBlocks(g.items.map(it => slideItemBlock(it, today)));
+            pages.forEach((pg, i) => slides.push({
+                title: '📁 ' + esc(g.name),
+                sub: '共 ' + g.items.length + ' 件' + (over ? '・💥 逾期 ' + over + ' 件' : '') + (pages.length > 1 ? '　（' + (i + 1) + '/' + pages.length + '）' : ''),
+                body: pg.blocks.join(''), tight: pg.tight
+            }));
+        });
+        return slides;
+    }
+
+    function composeSlide(sl, i, n) {
+        const t = new Date();
+        const short = t.getFullYear() + '/' + (t.getMonth() + 1) + '/' + t.getDate();
+        const foot = '<div class="s-foot"><span>追蹤事項進度・' + short + '</span><span>' + (i + 1) + ' / ' + n + '</span></div>';
+        if (sl.cover) return '<div class="slide s-cover">' + sl.html + '<div class="s-foot s-foot-cover"><span></span><span>' + (i + 1) + ' / ' + n + '</span></div></div>';
+        return '<div class="slide ' + (sl.tight ? 's-tight' : '') + '"><div class="s-head"><div class="s-title">' + sl.title + '</div><div class="s-sub">' + (sl.sub || '') + '</div></div><div class="s-body">' + sl.body + '</div>' + foot + '</div>';
+    }
+
+    function renderSlides() {
+        slidesCache = buildSlides();
+        if (slideIdx >= slidesCache.length) slideIdx = slidesCache.length - 1;
+        if (slideIdx < 0) slideIdx = 0;
+        showSlide();
+    }
+    function showSlide() {
+        const stage = document.getElementById('slideStage');
+        if (!stage || !slidesCache.length) return;
+        stage.innerHTML = composeSlide(slidesCache[slideIdx], slideIdx, slidesCache.length);
+        const ind = document.getElementById('slideIndicator');
+        if (ind) ind.textContent = '第 ' + (slideIdx + 1) + ' / ' + slidesCache.length + ' 頁';
+        fitSlide();
+    }
+    function slideGo(d) {
+        const to = Math.min(slidesCache.length - 1, Math.max(0, slideIdx + d));
+        if (to !== slideIdx) { slideIdx = to; showSlide(); }
+    }
+    function slideJump(to) {
+        slideIdx = Math.min(slidesCache.length - 1, Math.max(0, to));
+        showSlide();
+    }
+    function toggleSlideNotes(on) { slidesShowNotes = !!on; renderSlides(); }
+
+    // 依視窗寬度（全螢幕時依螢幕大小）等比縮放 1280×720 的投影片
+    function fitSlide() {
+        const vp = document.getElementById('slideViewport');
+        const stage = document.getElementById('slideStage');
+        if (!vp || !stage || !vp.clientWidth) return;
+        const full = document.fullscreenElement === vp;
+        const w = vp.clientWidth, h = vp.clientHeight;
+        const sc = full ? Math.min(w / SLIDE_W, h / SLIDE_H) : w / SLIDE_W;
+        stage.style.transform = 'scale(' + sc + ')';
+        stage.style.left = full ? ((w - SLIDE_W * sc) / 2) + 'px' : '0px';
+        stage.style.top = full ? ((h - SLIDE_H * sc) / 2) + 'px' : '0px';
+        vp.style.height = full ? '' : (SLIDE_H * sc) + 'px';
+    }
+    function slideFullscreen() {
+        const vp = document.getElementById('slideViewport');
+        if (document.fullscreenElement) { document.exitFullscreen(); }
+        else if (vp && vp.requestFullscreen) { vp.requestFullscreen(); }
+        else { alert('這個瀏覽器不支援全螢幕（手機請直接橫放螢幕）'); }
+    }
+    // 列印 / 存成 PDF：把每一頁各排成一張 16:9
+    function slidePrint() {
+        const box = document.getElementById('slidesPrint');
+        if (!box) return;
+        const n = slidesCache.length;
+        box.innerHTML = slidesCache.map((sl, i) => '<div class="print-slide">' + composeSlide(sl, i, n) + '</div>').join('');
+        document.body.classList.add('printing');
+        setTimeout(() => window.print(), 60);
+    }
+    window.addEventListener('afterprint', () => {
+        document.body.classList.remove('printing');
+        const box = document.getElementById('slidesPrint');
+        if (box) box.innerHTML = '';
+    });
+    window.addEventListener('resize', () => { if (currentFilter === 'slides') fitSlide(); });
+    document.addEventListener('fullscreenchange', () => { if (currentFilter === 'slides') fitSlide(); });
+    document.addEventListener('keydown', e => {
+        if (currentFilter !== 'slides') return;
+        const tag = (e.target && e.target.tagName) || '';
+        if (tag === 'TEXTAREA' || (tag === 'INPUT' && e.target.type !== 'checkbox')) return;
+        const k = e.key;
+        if (k === 'ArrowRight' || k === 'PageDown') { e.preventDefault(); slideGo(1); }
+        else if (k === 'ArrowLeft' || k === 'PageUp') { e.preventDefault(); slideGo(-1); }
+        else if ((k === ' ' || k === 'Enter') && tag !== 'BUTTON' && tag !== 'INPUT') { e.preventDefault(); slideGo(1); }
+        else if (k === 'Home') { e.preventDefault(); slideJump(0); }
+        else if (k === 'End') { e.preventDefault(); slideJump(slidesCache.length - 1); }
+        else if (k === 'f' || k === 'F') { slideFullscreen(); }
+    });
+    (function initSlideTouch() {
+        const vp = document.getElementById('slideViewport');
+        if (!vp || !vp.addEventListener) return;
+        let sx = null;
+        vp.addEventListener('touchstart', e => { sx = e.changedTouches[0].clientX; }, { passive: true });
+        vp.addEventListener('touchend', e => {
+            if (sx === null) return;
+            const dx = e.changedTouches[0].clientX - sx;
+            sx = null;
+            if (Math.abs(dx) > 50) slideGo(dx < 0 ? 1 : -1);
+        }, { passive: true });
+        vp.addEventListener('click', e => {
+            const r = vp.getBoundingClientRect();
+            slideGo((e.clientX - r.left) < r.width * 0.3 ? -1 : 1);
+        });
+    })();
 
     // 預設排序：今日待辦優先 → 重要性高到低 → 要求日近到遠（沒填要求日的放後面）
     function compareDefault(a, b) {
