@@ -52,6 +52,18 @@
             border-top: 2px solid var(--primary-color);
             box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.12);
         }
+        .symbol-bar .undo-btn {
+            padding: 4px 12px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #fff;
+            background: #e67e22;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .symbol-bar .undo-btn:hover:not(:disabled) { background: #d35400; }
+        .symbol-bar .undo-btn:disabled { background: #ccc; cursor: not-allowed; }
         .symbol-bar .sym-label {
             font-size: 12px;
             color: #888;
@@ -1104,6 +1116,8 @@
 
     <!-- 常用符號列：固定在視窗最下方，點一下複製 -->
     <div class="symbol-bar">
+        <button id="undoBtn" class="undo-btn" onclick="undoLast()" disabled>↩ 復原上一步</button>
+        <span class="sym-sep"></span>
         <span class="sym-label">常用符號（點一下複製）：</span>
         <button class="sym" onclick="copySymbol(this.textContent)">【】</button>
         <button class="sym" onclick="copySymbol(this.textContent)">「」</button>
@@ -1510,6 +1524,7 @@
                     archivedTasks = res.data.archivedTasks || [];
                     localStorage.setItem('kanban_tasks', JSON.stringify(tasks));
                     localStorage.setItem('kanban_archived_tasks', JSON.stringify(archivedTasks));
+                    resetUndo();
                 }
             })
             .catch(err => console.error('讀取雲端資料失敗:', err))
@@ -1577,7 +1592,7 @@
                 }
             }
         }
-        if (changed) saveToStorage();
+        if (changed) saveToStorage(true);
     }
 
     function switchFilter(mode) {
@@ -1613,11 +1628,54 @@
         render();
     }
 
-    function saveToStorage() {
+    // ====== 復原上一步：每次存檔前，把「上一個狀態」記下來（最多 30 步）======
+    let undoStack = [];
+    let lastSnap = null;
+    function takeSnap() { return JSON.stringify({ t: tasks, a: archivedTasks }); }
+    function updateUndoBtn() {
+        const b = document.getElementById('undoBtn');
+        if (!b) return;
+        b.disabled = undoStack.length === 0;
+        b.textContent = '↩ 復原上一步' + (undoStack.length ? '（' + undoStack.length + '）' : '');
+    }
+    function resetUndo() { undoStack = []; lastSnap = takeSnap(); updateUndoBtn(); }
+    function saveToStorage(noUndo) {
+        const cur = takeSnap();
+        if (!noUndo && lastSnap !== null && cur !== lastSnap) {
+            undoStack.push(lastSnap);
+            if (undoStack.length > 30) undoStack.shift();
+        }
+        lastSnap = cur;
+        updateUndoBtn();
         localStorage.setItem('kanban_tasks', JSON.stringify(tasks));
         localStorage.setItem('kanban_archived_tasks', JSON.stringify(archivedTasks));
         syncToGoogleDrive();
     }
+    function undoLast() {
+        if (!undoStack.length) { showSymbolMsg('沒有可以復原的動作'); return; }
+        const prev = undoStack.pop();
+        let data;
+        try { data = JSON.parse(prev); } catch (e) { return; }
+        tasks = data.t || [];
+        archivedTasks = data.a || [];
+        lastSnap = prev;
+        updateUndoBtn();
+        localStorage.setItem('kanban_tasks', JSON.stringify(tasks));
+        localStorage.setItem('kanban_archived_tasks', JSON.stringify(archivedTasks));
+        syncToGoogleDrive();
+        render();
+        showSymbolMsg('已復原上一步');
+    }
+    // Ctrl+Z / Cmd+Z：不在輸入框內時才復原（輸入框內維持瀏覽器自己的文字復原）
+    document.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+            const el = document.activeElement;
+            if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT' || el.tagName === 'SELECT')) return;
+            if (currentFilter === 'mobile' || currentFilter === 'slides') return;
+            e.preventDefault();
+            undoLast();
+        }
+    });
 
     // 切換「今日待辦」標記
     function toggleToday(id) {
@@ -2688,6 +2746,7 @@
     }
 
     window.onload = function() {
+        resetUndo();
         // 手機（窄螢幕）打開時，直接進「手機檢視」
         if (window.innerWidth <= 700) switchFilter('mobile');
         loadFromCloud(function() {
