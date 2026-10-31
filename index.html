@@ -52,6 +52,15 @@
             border-top: 2px solid var(--primary-color);
             box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.12);
         }
+        .sync-badge {
+            position: fixed; top: 6px; right: 10px; z-index: 950;
+            font-size: 12px; padding: 3px 10px; border-radius: 12px;
+            background: #fff; color: #27ae60; border: 1px solid #cfe9da;
+            cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.12);
+        }
+        .sync-badge.busy, .sync-badge.pending { color: #7f8c8d; border-color: #ddd; }
+        .sync-badge.error { color: #fff; background: #e74c3c; border-color: #e74c3c; font-weight: bold; }
+        body.slides-mode .sync-badge, body.printing .sync-badge { display: none; }
         .symbol-bar .undo-btn {
             padding: 4px 12px;
             font-size: 13px;
@@ -1114,6 +1123,8 @@
     <div id="mobileContainer" style="display:none;"></div>
 </div>
 
+    <div id="syncBadge" class="sync-badge" onclick="runSync()">☁️ 尚未同步</div>
+
     <!-- 常用符號列：固定在視窗最下方，點一下複製 -->
     <div class="symbol-bar">
         <button id="undoBtn" class="undo-btn" onclick="undoLast()" disabled>↩ 復原上一步</button>
@@ -1502,34 +1513,173 @@
     let tasks = JSON.parse(localStorage.getItem('kanban_tasks')) || [];
     let archivedTasks = JSON.parse(localStorage.getItem('kanban_archived_tasks')) || [];
 
-    // 上傳目前資料到雲端
-    function syncToGoogleDrive() {
-        if (!GOOGLE_SCRIPT_URL) return;
-        fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key: SECRET_KEY, tasks: tasks, archivedTasks: archivedTasks })
-        }).catch(err => console.error('雲端同步失敗:', err));
+    // ====== 雲端同步（多台裝置）：逐筆合併，不整份覆蓋 ======
+    // 每筆事項有 updatedAt（最後修改時間）；兩邊都有同一筆時，較新的那份留下。
+    // 刪除會留下「墓碑」（id → 刪除時間），別台裝置同步時才知道要一起刪掉，而不是又把它補回來。
+    // 墓碑在雲端是放在 archivedTasks 裡一種特殊項目（_tomb），所以 Apps Script 不用修改。
+    let tombs = {};
+    try { tombs = JSON.parse(localStorage.getItem('kanban_tombs')) || {}; } catch (e) { tombs = {}; }
+    const TOMB_KEEP_MS = 60 * 24 * 60 * 60 * 1000;
+
+    function itemKey(it) { const c = Object.assign({}, it); delete c.updatedAt; return JSON.stringify(c); }
+
+    // 比對「上一個狀態」：有變動的事項蓋上新時間、消失的事項留下墓碑、重新出現的事項移除墓碑
+    function stampChanges(prevSnap) {
+        let prev = {};
+        try {
+            const d = JSON.parse(prevSnap || '{}');
+            (d.t || []).concat(d.a || []).forEach(it => { prev[String(it.id)] = itemKey(it); });
+        } catch (e) { prev = {}; }
+        const now = Date.now();
+        const seen = {};
+        tasks.concat(archivedTasks).forEach(it => {
+            const id = String(it.id);
+            seen[id] = true;
+            if (prev[id] !== itemKey(it)) { it.updatedAt = now; delete tombs[id]; }
+        });
+        Object.keys(prev).forEach(id => { if (!seen[id]) tombs[id] = now; });
+        localStorage.setItem('kanban_tombs', JSON.stringify(tombs));
     }
 
-    // 從雲端讀取最新資料，並更新畫面
+    // 把雲端回來的資料拆成：事項 / 已歸檔 / 墓碑
+    function splitRemote(data) {
+        const r = { tasks: [], archived: [], tombs: {} };
+        if (!data) return r;
+        (data.tasks || []).forEach(it => { if (it && it.id !== undefined && !it._tomb) r.tasks.push(it); });
+        (data.archivedTasks || []).forEach(it => {
+            if (!it) return;
+            if (it._tomb) { r.tombs[String(it.tid)] = Math.max(r.tombs[String(it.tid)] || 0, it.deletedAt || 0); }
+            else if (it.id !== undefined) r.archived.push(it);
+        });
+        return r;
+    }
+
+    // 把雲端資料合併進本機（不覆蓋本機較新的內容）
+    function mergeRemote(r) {
+        const allTombs = Object.assign({}, tombs);
+        Object.keys(r.tombs).forEach(id => { allTombs[id] = Math.max(allTombs[id] || 0, r.tombs[id]); });
+        const cutoff = Date.now() - TOMB_KEEP_MS;
+        Object.keys(allTombs).forEach(id => { if (allTombs[id] < cutoff) delete allTombs[id]; });
+
+        const best = {}, order = [];
+        const feed = (list, where) => list.forEach(it => {
+            const id = String(it.id);
+            if (!(id in best)) { best[id] = { it: it, where: where }; order.push(id); }
+            else if ((it.updatedAt || 0) > (best[id].it.updatedAt || 0)) best[id] = { it: it, where: where };
+        });
+        feed(tasks, 't'); feed(archivedTasks, 'a'); feed(r.tasks, 't'); feed(r.archived, 'a');
+
+        const nt = [], na = [];
+        order.forEach(id => {
+            const b = best[id];
+            if ((allTombs[id] || 0) >= (b.it.updatedAt || 0) && allTombs[id]) return;   // 已被刪除
+            (b.where === 't' ? nt : na).push(b.it);
+        });
+        tasks = nt; archivedTasks = na; tombs = allTombs;
+        localStorage.setItem('kanban_tasks', JSON.stringify(tasks));
+        localStorage.setItem('kanban_archived_tasks', JSON.stringify(archivedTasks));
+        localStorage.setItem('kanban_tombs', JSON.stringify(tombs));
+    }
+
+    // 內容指紋：用來判斷「本機和雲端是否已經一樣」，一樣就不必再寫入雲端
+    function stateSig(t, a, tb) {
+        const f = it => String(it.id) + ':' + (it.updatedAt || 0) + ':' + itemKey(it).length;
+        return t.map(f).sort().join('|') + '#' + a.map(f).sort().join('|') + '#' +
+            Object.keys(tb).sort().map(k => k + ':' + tb[k]).join('|');
+    }
+
+    function buildPayload() {
+        const tombItems = Object.keys(tombs).map(id => ({ id: 'tomb_' + id, _tomb: true, tid: id, deletedAt: tombs[id] }));
+        return JSON.stringify({ key: SECRET_KEY, tasks: tasks, archivedTasks: archivedTasks.concat(tombItems) });
+    }
+
+    // ---- 狀態小標籤（右上角）----
+    function setSyncStatus(state, msg) {
+        const el = document.getElementById('syncBadge');
+        if (!el) return;
+        el.className = 'sync-badge ' + state;
+        const hh = new Date().toTimeString().slice(0, 5);
+        el.textContent = state === 'busy' ? '☁️ 同步中…'
+            : state === 'pending' ? '☁️ 等待同步…'
+            : state === 'error' ? '⚠️ 同步失敗（點我重試）'
+            : '☁️ 已同步 ' + hh;
+        el.title = msg || (state === 'error' ? '尚未同步' : '點一下立即同步');
+    }
+
+    let syncBusy = false, syncAgain = false, syncTimer = null, pendingRender = false;
+    function editingNow() {
+        const el = document.activeElement;
+        return !!(el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT' || el.tagName === 'SELECT'));
+    }
+
+    // 排程上傳（本機有改動時呼叫；連續改動會合併成一次）
+    function syncToGoogleDrive() {
+        if (!GOOGLE_SCRIPT_URL) return;
+        setSyncStatus('pending');
+        clearTimeout(syncTimer);
+        syncTimer = setTimeout(runSync, 500);
+    }
+
+    async function runSync() {
+        if (!GOOGLE_SCRIPT_URL) return;
+        if (syncBusy) { syncAgain = true; return; }
+        syncBusy = true;
+        try { do { syncAgain = false; await syncOnce(); } while (syncAgain); }
+        finally { syncBusy = false; }
+    }
+
+    // 一輪同步：讀雲端 → 合併 → 有差異才寫回雲端
+    async function syncOnce() {
+        setSyncStatus('busy');
+        let remote;
+        try {
+            const res = await fetch(`${GOOGLE_SCRIPT_URL}?key=${encodeURIComponent(SECRET_KEY)}`).then(r => r.json());
+            if (!res.ok) throw new Error(res.error || '雲端回報錯誤');
+            remote = splitRemote(res.data);
+        } catch (err) {
+            console.error('讀取雲端資料失敗:', err);
+            setSyncStatus('error', '讀取雲端失敗：' + err.message);
+            return;
+        }
+        const before = takeSnap();
+        mergeRemote(remote);
+        const after = takeSnap();
+        lastSnap = after;                       // 合併不算使用者的動作，不進復原記錄
+        if (after !== before) {
+            if (editingNow()) pendingRender = true; else render();
+        }
+        updateUndoBtn();
+
+        const same = stateSig(tasks, archivedTasks, tombs) === stateSig(remote.tasks, remote.archived, remote.tombs);
+        if (same) { setSyncStatus('ok'); return; }
+        try {
+            const res = await fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: buildPayload()
+            }).then(r => r.json());
+            if (!res.ok) throw new Error(res.error || '雲端回報錯誤');
+            setSyncStatus('ok');
+        } catch (err) {
+            console.error('雲端同步失敗:', err);
+            const kb = Math.round(buildPayload().length / 1024);
+            setSyncStatus('error', '寫入雲端失敗：' + err.message + '（資料約 ' + kb + ' KB）');
+        }
+    }
+
+    // 開啟網頁 / 手動呼叫：同步一次再執行 callback
     function loadFromCloud(callback) {
         if (!GOOGLE_SCRIPT_URL) { if (callback) callback(); return; }
-        fetch(`${GOOGLE_SCRIPT_URL}?key=${encodeURIComponent(SECRET_KEY)}`)
-            .then(res => res.json())
-            .then(res => {
-                if (res.ok && res.data) {
-                    tasks = res.data.tasks || [];
-                    archivedTasks = res.data.archivedTasks || [];
-                    localStorage.setItem('kanban_tasks', JSON.stringify(tasks));
-                    localStorage.setItem('kanban_archived_tasks', JSON.stringify(archivedTasks));
-                    resetUndo();
-                }
-            })
-            .catch(err => console.error('讀取雲端資料失敗:', err))
-            .finally(() => { if (callback) callback(); });
+        runSync().then(() => { resetUndo(); if (callback) callback(); });
     }
+
+    // 回到這個分頁、或每 60 秒，自動檢查別台裝置有沒有更新
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') runSync(); });
+    window.addEventListener('focus', () => runSync());
+    setInterval(() => { if (document.visibilityState === 'visible' && !editingNow()) runSync(); }, 60000);
+    document.addEventListener('focusout', () => {
+        setTimeout(() => { if (pendingRender && !editingNow()) { pendingRender = false; render(); } }, 250);
+    });
 
     function toggleDateFields(type) {
         const dateFields = document.querySelectorAll('.date-field');
@@ -1628,7 +1778,8 @@
         render();
     }
 
-    // ====== 復原上一步：每次存檔前，把「上一個狀態」記下來（最多 30 步）======
+    // ====== 復原上一步：每一步只記「這次動作改到哪幾筆、原本長怎樣」（最多 30 步）======
+    // 這樣復原只會還原你自己改的那幾筆，不會把別台裝置同步進來的內容一起退掉。
     let undoStack = [];
     let lastSnap = null;
     function takeSnap() { return JSON.stringify({ t: tasks, a: archivedTasks }); }
@@ -1639,11 +1790,31 @@
         b.textContent = '↩ 復原上一步' + (undoStack.length ? '（' + undoStack.length + '）' : '');
     }
     function resetUndo() { undoStack = []; lastSnap = takeSnap(); updateUndoBtn(); }
+
+    // 比較兩個快照，回傳有變動的事項：[{id, prev: {it, where} 或 null(原本不存在)}]
+    function diffSnaps(prevSnap, curSnap) {
+        let P, C;
+        try { P = JSON.parse(prevSnap); C = JSON.parse(curSnap); } catch (e) { return []; }
+        const idx = d => { const m = {}; (d.t || []).forEach(it => { m[String(it.id)] = { it: it, where: 't' }; });
+                           (d.a || []).forEach(it => { m[String(it.id)] = { it: it, where: 'a' }; }); return m; };
+        const pm = idx(P), cm = idx(C), out = [];
+        Object.keys(cm).forEach(id => {
+            if (!pm[id]) out.push({ id: id, prev: null });
+            else if (pm[id].where !== cm[id].where || itemKey(pm[id].it) !== itemKey(cm[id].it)) out.push({ id: id, prev: pm[id] });
+        });
+        Object.keys(pm).forEach(id => { if (!cm[id]) out.push({ id: id, prev: pm[id] }); });
+        return out;
+    }
+
     function saveToStorage(noUndo) {
+        stampChanges(lastSnap);
         const cur = takeSnap();
         if (!noUndo && lastSnap !== null && cur !== lastSnap) {
-            undoStack.push(lastSnap);
-            if (undoStack.length > 30) undoStack.shift();
+            const step = diffSnaps(lastSnap, cur);
+            if (step.length) {
+                undoStack.push(step);
+                if (undoStack.length > 30) undoStack.shift();
+            }
         }
         lastSnap = cur;
         updateUndoBtn();
@@ -1653,12 +1824,18 @@
     }
     function undoLast() {
         if (!undoStack.length) { showSymbolMsg('沒有可以復原的動作'); return; }
-        const prev = undoStack.pop();
-        let data;
-        try { data = JSON.parse(prev); } catch (e) { return; }
-        tasks = data.t || [];
-        archivedTasks = data.a || [];
-        lastSnap = prev;
+        const step = undoStack.pop();
+        const beforeUndo = lastSnap;
+        const ids = {};
+        step.forEach(c => { ids[c.id] = true; });
+        tasks = tasks.filter(it => !ids[String(it.id)]);
+        archivedTasks = archivedTasks.filter(it => !ids[String(it.id)]);
+        step.forEach(c => {
+            if (!c.prev) return;
+            (c.prev.where === 't' ? tasks : archivedTasks).push(JSON.parse(JSON.stringify(c.prev.it)));
+        });
+        stampChanges(beforeUndo);      // 復原也是一次修改：蓋新時間，別台才會跟著回復
+        lastSnap = takeSnap();
         updateUndoBtn();
         localStorage.setItem('kanban_tasks', JSON.stringify(tasks));
         localStorage.setItem('kanban_archived_tasks', JSON.stringify(archivedTasks));
