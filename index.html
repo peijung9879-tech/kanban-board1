@@ -1128,6 +1128,7 @@
     <!-- 常用符號列：固定在視窗最下方，點一下複製 -->
     <div class="symbol-bar">
         <button id="undoBtn" class="undo-btn" onclick="undoLast()" disabled>↩ 復原上一步</button>
+        <button class="undo-btn" style="background:#2980b9" onclick="exportBackup()">💾 匯出備份</button>
         <span class="sym-sep"></span>
         <span class="sym-label">常用符號（點一下複製）：</span>
         <button class="sym" onclick="copySymbol(this.textContent)">【】</button>
@@ -1567,7 +1568,8 @@
             if (!(id in best)) { best[id] = { it: it, where: where }; order.push(id); }
             else if ((it.updatedAt || 0) > (best[id].it.updatedAt || 0)) best[id] = { it: it, where: where };
         });
-        feed(tasks, 't'); feed(archivedTasks, 'a'); feed(r.tasks, 't'); feed(r.archived, 'a');
+        // 雲端先放進去；本機要「更新時間比較新」才會蓋過雲端（舊資料沒有時間戳記時，以雲端為準）
+        feed(r.tasks, 't'); feed(r.archived, 'a'); feed(tasks, 't'); feed(archivedTasks, 'a');
 
         const nt = [], na = [];
         order.forEach(id => {
@@ -1603,6 +1605,7 @@
             : state === 'pending' ? '☁️ 等待同步…'
             : state === 'error' ? '⚠️ 同步失敗（點我重試）'
             : '☁️ 已同步 ' + hh;
+        el.textContent += '（v2）';
         el.title = msg || (state === 'error' ? '尚未同步' : '點一下立即同步');
     }
 
@@ -1641,6 +1644,12 @@
             setSyncStatus('error', '讀取雲端失敗：' + err.message);
             return;
         }
+        // 第一次合併前，把這台裝置的本機資料另存一份（以防萬一）
+        try {
+            if (!localStorage.getItem('kanban_backup_premerge')) {
+                localStorage.setItem('kanban_backup_premerge', JSON.stringify({ savedAt: new Date().toISOString(), snap: takeSnap() }));
+            }
+        } catch (e) { /* 空間不足就略過 */ }
         const before = takeSnap();
         mergeRemote(remote);
         const after = takeSnap();
@@ -1843,6 +1852,19 @@
         render();
         showSymbolMsg('已復原上一步');
     }
+    // 匯出備份：把目前資料（和第一次同步前的本機資料）下載成 JSON 檔
+    function exportBackup() {
+        let pre = null;
+        try { pre = JSON.parse(localStorage.getItem('kanban_backup_premerge')); } catch (e) {}
+        const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(),
+            current: { tasks: tasks, archivedTasks: archivedTasks }, beforeFirstSync: pre }, null, 1)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = '追蹤事項備份_' + localDateStr() + '.json';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }
+
     // Ctrl+Z / Cmd+Z：不在輸入框內時才復原（輸入框內維持瀏覽器自己的文字復原）
     document.addEventListener('keydown', e => {
         if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
